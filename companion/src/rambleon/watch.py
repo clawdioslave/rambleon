@@ -42,12 +42,15 @@ class Finalizer:
     """Decides when a night is over. An explicitly ended session finalizes at once; a suspended one waits
     until nobody has resumed it (the AddOn's 10-minute window) — that is what a logout looks like from here."""
 
-    def __init__(self, run: Callable[[dict[str, Any]], None], log: Log, timeout: float | None = None):
+    def __init__(self, run: Callable[[dict[str, Any]], None], log: Log, timeout: float | None = None,
+                 logged_out: Callable[[float], bool] | None = None):
         from .model import SUSPEND_TIMEOUT
         self.run = run
         self.log = log
         self.timeout = (SUSPEND_TIMEOUT + FINALIZE_GRACE) if timeout is None else timeout
+        self.logged_out = logged_out          # (capture time) -> True when the player has clearly left
         self.pending: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._last_check = 0.0
 
     def on_capture(self, session: dict[str, Any]) -> None:
         slug = session.get("character", {}).get("slug", "unknown")
@@ -56,14 +59,25 @@ class Finalizer:
             self.run(session)
         else:
             self.pending[slug] = (time.time() + self.timeout, session)
-            self.log(f"{session['character'].get('displayName')} is still playing (or reloading); the chapter is written "
-                     f"{int(self.timeout // 60)} min after the last save")
+            self.log(f"{session['character'].get('displayName')} saved; the chapter is written as soon as they log out "
+                     f"(or {int(self.timeout // 60)} min after the last save if that cannot be told)")
 
     def tick(self) -> None:
         now = time.time()
+        check_logout = self.logged_out is not None and now - self._last_check >= 5
+        if check_logout:
+            self._last_check = now
         for slug, (due, session) in list(self.pending.items()):
-            if now >= due:
+            left = False
+            if check_logout:
+                try:
+                    left = self.logged_out(due - self.timeout)
+                except Exception:
+                    left = False
+            if now >= due or left:
                 del self.pending[slug]
+                if left:
+                    self.log(f"{session['character'].get('displayName')} logged out — writing the chapter")
                 self.run(session)
 
 

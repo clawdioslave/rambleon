@@ -58,6 +58,22 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
   `EQUIP` events for uncommon-or-better items equipped (once per item per session). Quality from
   `C_Item.GetItemQualityByID`, falling back to the link colour. Panel row "Loot Worth Keeping"; export section; prompt section.
 
+### Late-night improvements (2026-09-21, after the player left)
+- `ramble service install|uninstall|status`: the watcher as a launchd user agent (starts at login, no terminal).
+- Night finalization now fires the moment the player leaves: WoW process gone, or `Logs/Client.log` shows a logout
+  after the last save (`wowstate.py`); the ten-minute timer stays as the fallback.
+- macOS notification when a chapter is written; `exports/html/index.html` lists every night; the in-game chapters
+  reader shows when chapters were last published.
+- End level is now derived from event levels on both sides (the client's level at logout came back stale: a
+  session with a `LEVEL_UP` to 9 still had `endLevel = 8`).
+- The stale terminal watcher was replaced by a background `ramble watch` (log: `~/Library/Logs/Rambleon/watch.log`).
+- `docs/roadmap.md`: the product plan.
+
+### To verify next session
+- Loot capture in the real client (the three greens came before the loot code was loaded; no LOOT events yet).
+- Whether `/ramble chapters` shows tonight's chapter after login (published at 23:27, republished after reprocess).
+- Whether logout detection fires (watch.log will say "logged out — writing the chapter").
+
 ### Known issue found tonight
 - The standalone `claude` CLI on this Mac reports "OAuth access token has been revoked", so `ramble summarize` skipped
   the AI chapter and only wrote the prompt (correct degraded behaviour). Fix on the Mac: run `claude` in a terminal

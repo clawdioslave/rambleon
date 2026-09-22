@@ -308,6 +308,10 @@ function ns.AddEvent(eventType, fields)
     ev.zone, ev.subzone = loc.zone, loc.subzone
   end
   table.insert(s.events, ev)
+  -- The level on every event is the source of truth for endLevel; UnitLevel at logout proved unreliable.
+  if type(ev.level) == "number" and ev.level > (tonumber(s.character.endLevel) or 0) then
+    s.character.endLevel = ev.level
+  end
   local counter = COUNTER_FOR[eventType]
   if counter then s.counters[counter] = (s.counters[counter] or 0) + 1 end
   s.lastSeen = ev.t

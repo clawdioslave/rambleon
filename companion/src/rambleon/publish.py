@@ -78,6 +78,11 @@ def write_chapters_lua(chapters: list[dict[str, Any]], addon_src: Path) -> Path:
         lines.append(f"    startedAt = {int(c.get('startedAt') or 0)},")
         lines.append("  },")
     lines.append("}")
+    now = datetime.now()
+    lines.append("RambleonChaptersMeta = {")
+    lines.append(f"  publishedAt = {int(now.timestamp())},")
+    lines.append(f"  published = {lua_string(now.strftime('%B %-d, %Y at %-I:%M %p'))},")
+    lines.append("}")
     path = addon_src / "Chapters.lua"
     atomic_write_bytes(path, ("\n".join(lines) + "\n").encode("utf-8"))
     return path
@@ -86,6 +91,30 @@ def write_chapters_lua(chapters: list[dict[str, Any]], addon_src: Path) -> Path:
 def publish_chapters(archive: Archive, paths: Paths) -> tuple[Path, int]:
     chapters = build_chapters(archive, paths.exports_dir)
     return write_chapters_lua(chapters, paths.addon_src), len(chapters)
+
+
+def write_html_index(archive: Archive, exports_dir: Path) -> Path:
+    """exports/html/index.html: every night, newest first, linking to its story page (built if missing)."""
+    rows = []
+    all_nights = nights(archive)
+    for night in reversed(all_nights):
+        page = exports_dir / "html" / export_filename(night).replace(".md", ".html")
+        if not page.exists():
+            export_html(night, archive, exports_dir)
+        journal = load_journal(exports_dir, night["id"])
+        number = night_number(archive, night)
+        cnt = night.get("counters", {})
+        rows.append(f"<li><a href='{html.escape(page.name)}'>{html.escape(chapter_title(night, journal, number))}</a>"
+                    f"<span class='m'> — {html.escape(long_date(night.get('startedAt')))} · {html.escape(duration(night.get('playedSeconds')))}"
+                    f" · {cnt.get('questsCompleted', 0)} quests · {cnt.get('kills', 0)} kills · {len(night.get('people', []))} people</span></li>")
+    name = html.escape(all_nights[-1]["character"].get("displayName", "")) if rows else "Rambleon"
+    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>{name} — Adventure Journal</title><style>{CSS}"
+           "li{margin:10px 0}.m{color:#6b5233;font-size:14px}</style></head><body>"
+           f"<h1>{name}</h1><div class='meta'>Adventure journal · {len(rows)} chapter{'s' if len(rows) != 1 else ''}</div>"
+           "<ul>" + "".join(rows) + "</ul><footer>Recorded by Rambleon</footer></body></html>")
+    out = exports_dir / "html" / "index.html"
+    atomic_write_bytes(out, doc.encode("utf-8"))
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------

@@ -288,15 +288,17 @@ function UI.ShowChapter(index)
   local f = chaptersFrame or buildChapters()
   local chapters = myChapters()
   local text
+  local meta = _G.RambleonChaptersMeta
+  local published = (type(meta) == "table" and meta.published) and ("Published " .. meta.published) or "Nothing published yet"
   if #chapters == 0 then
-    f.subtitle:SetText("")
+    f.subtitle:SetText(published)
     text = "No chapters yet.\n\nPlay, then log out. With `ramble watch` running on your Mac, tonight's chapter is written about ten minutes after you leave and shows up here next login.\n\nIn a hurry: /ramble save now, then `ramble summarize tonight` on the Mac, then /reload."
   else
     if index < 1 then index = 1 end
     if index > #chapters then index = #chapters end
     UI.chapterIndex = index
     local c = chapters[index]
-    f.subtitle:SetText(string.format("%s  ·  %s  ·  %d of %d", c.date or "", c.duration or "", index, #chapters))
+    f.subtitle:SetText(string.format("%s  ·  %s  ·  %d of %d  ·  %s", c.date or "", c.duration or "", index, #chapters, published:lower()))
     if UI.chapterShowLog or not c.journal or c.journal == "" then
       text = (c.title or "") .. "\n\n" .. (c.recap or "") .. "\n\n" .. (c.log or "")
     else

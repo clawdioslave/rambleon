@@ -75,6 +75,11 @@ def normalize_session(raw: Any, addon_version: Any = None, db_schema: Any = None
             events.append(clean)
     events.sort(key=lambda e: e["t"])  # stable: preserves insertion order for equal timestamps
     s["events"] = events
+    levels = [e["level"] for e in events if isinstance(e.get("level"), (int, float)) and not isinstance(e.get("level"), bool)]
+    if levels:
+        start = _int(s["character"].get("startLevel"))
+        s["character"]["startLevel"] = start if start is not None else int(min(levels))
+        s["character"]["endLevel"] = max(_int(s["character"].get("endLevel")) or 0, int(max(levels)))
 
     s["zones"] = [z for z in _as_list(raw.get("zones")) if isinstance(z, dict)]
     s["people"] = [p for p in _as_list(raw.get("people")) if isinstance(p, dict)]

@@ -40,6 +40,16 @@ def test_stale_suspended_session_becomes_ended():
     assert s["state"] == "ended" and s["endReason"] == "logout" and s["endedAt"] == raw["lastSeen"]
 
 
+def test_end_level_derived_from_events():
+    from rambleon.normalize import normalize_session
+    raw = {"id": "x", "state": "ended", "startedAt": 1, "lastSeen": 2, "endedAt": 2,
+           "character": {"name": "A", "startLevel": 8, "endLevel": 8},
+           "events": [{"t": 1, "type": "SESSION_START", "level": 8}, {"t": 2, "type": "LEVEL_UP", "level": 9},
+                      {"t": 3, "type": "ZONE_ENTER", "level": 9}]}
+    s = normalize_session(raw, now=10_000)
+    assert s["character"]["startLevel"] == 8 and s["character"]["endLevel"] == 9
+
+
 def test_empty_db_yields_nothing():
     assert sessions_from_db({"schemaVersion": 1, "sessions": []}) == []
     assert sessions_from_db(None) == []

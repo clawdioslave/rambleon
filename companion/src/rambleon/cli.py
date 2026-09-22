@@ -17,9 +17,12 @@ from .doctor import run_doctor
 from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
+from . import service as svc
 from .nights import nights as list_nights, resolve_night
-from .publish import export_html, publish_chapters
+from .notify import notify
+from .publish import export_html, publish_chapters, write_html_index
 from .watch import Finalizer
+from .wowstate import logged_out_since
 from .summarize import DEFAULT_MODEL, summarize as run_summarize
 from .watch import ingest_once, reprocess as run_reprocess, watch as run_watch
 
@@ -98,8 +101,12 @@ def _finish_night(archive: Archive, paths, use_ai: bool, model: str):
             run_summarize(night, archive, paths.exports_dir, use_ai=True, model=model, log=log)
         page = export_html(night, archive, paths.exports_dir)
         log(f"story page {page}")
+        write_html_index(archive, paths.exports_dir)
         _, n = publish_chapters(archive, paths)
         log(f"published {n} chapter(s) to the game — they show under /ramble chapters after the next login or /reload")
+        c = night.get("counters", {})
+        notify("Rambleon", f"{night['character'].get('displayName')}: {duration(night.get('playedSeconds'))} in Azeroth, "
+                           f"{c.get('questsCompleted', 0)} quests, {c.get('kills', 0)} kills. Chapter written.")
     return run
 
 
@@ -115,7 +122,8 @@ def watch(interval: float = typer.Option(1.0, help="Seconds between polls."),
     if paths.wow_dir is None:
         console.print("[red]WoW directory not found[/red] (set RAMBLEON_WOW_DIR)")
         raise typer.Exit(1)
-    finalizer = None if no_auto else Finalizer(_finish_night(archive, paths, use_ai=not no_ai, model=model), log)
+    finalizer = None if no_auto else Finalizer(_finish_night(archive, paths, use_ai=not no_ai, model=model), log,
+                                               logged_out=lambda since: logged_out_since(paths.wow_dir, since))
     try:
         run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots,
                   after_capture=finalizer.on_capture if finalizer else None, tick=finalizer.tick if finalizer else None)
@@ -128,7 +136,34 @@ def publish() -> None:
     """Write the latest chapters into the AddOn (Chapters.lua) so /ramble chapters can show them in game."""
     archive, paths = _archive()
     path, n = publish_chapters(archive, paths)
-    console.print(f"published {n} chapter(s) → {path}. In WoW: /reload, then /ramble chapters.")
+    index = write_html_index(archive, paths.exports_dir)
+    console.print(f"published {n} chapter(s) → {path}. In WoW: /reload, then /ramble chapters. Web index: {index}")
+
+
+service_app = typer.Typer(help="Run the watcher in the background at login (launchd), no terminal needed.")
+app.add_typer(service_app, name="service")
+
+
+@service_app.command("install")
+def service_install(no_ai: bool = typer.Option(False, "--no-ai")) -> None:
+    """Install and start the background watcher (starts again at every login)."""
+    try:
+        console.print(svc.install(["--no-ai"] if no_ai else []))
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+
+@service_app.command("uninstall")
+def service_uninstall() -> None:
+    """Stop and remove the background watcher."""
+    console.print(svc.uninstall())
+
+
+@service_app.command("status")
+def service_status() -> None:
+    """Is the background watcher installed and running?"""
+    console.print(svc.status())
 
 
 @app.command()

@@ -65,3 +65,21 @@ def test_finalizer_waits_for_logout():
     assert len(runs) == 1
     fin.on_capture(dict(a, state="ended"))
     assert len(runs) == 2
+
+
+def test_finalizer_runs_at_logout():
+    runs = []
+    fin = Finalizer(runs.append, lambda m: None, timeout=100, logged_out=lambda since: True)
+    a, _ = two_sessions()
+    fin.on_capture(dict(a, state="suspended"))
+    fin.tick()
+    assert len(runs) == 1
+
+
+def test_wowstate_parses_client_log(tmp_path):
+    from rambleon.wowstate import last_client_events
+    (tmp_path / "Logs").mkdir()
+    (tmp_path / "Logs" / "Client.log").write_text(
+        "9/20 20:54:43.063  Character Login SEND\n9/20 20:59:32.762  Client Object Manager Destroyed\n")
+    logout, login = last_client_events(tmp_path)
+    assert logout and login and logout > login

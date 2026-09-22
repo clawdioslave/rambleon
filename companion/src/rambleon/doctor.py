@@ -87,10 +87,14 @@ def run_doctor(paths: Paths) -> list[Check]:
         checks.append(Check("Archive", "NOT WRITABLE", f"{paths.archive_dir}: {e}", False))
 
     pid = archive.watcher_pid()
+    from . import service as svc
     if pid:
-        checks.append(Check("Watcher", "RUNNING", f"ramble watch (pid {pid})", True, essential=False))
+        how = "background service" if svc.is_loaded() else "terminal"
+        checks.append(Check("Watcher", "RUNNING", f"ramble watch (pid {pid}, {how})", True, essential=False))
+    elif svc.PLIST.exists():
+        checks.append(Check("Watcher", "SERVICE STOPPED", "run `ramble service install` again", False, essential=False))
     else:
-        checks.append(Check("Watcher", "READY", "not running — start `ramble watch` before you play", True, essential=False))
+        checks.append(Check("Watcher", "READY", "not running — `ramble service install` runs it in the background at login", True, essential=False))
 
     chars = _character_folders(paths)
     latest = archive.list_sessions()[-1] if archive.list_sessions() else None
