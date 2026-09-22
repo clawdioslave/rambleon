@@ -49,3 +49,13 @@ def test_voices():
     assert "Christie Golden" in load_voice("golden")
     assert "{voice}" not in build_prompt(s, 1, "field-journal")
     assert "field journal" in build_prompt(s, 1, "field-journal")
+
+
+def test_character_overrides(tmp_path, monkeypatch):
+    from rambleon import summarize as sm
+    (tmp_path / "rambleon.local.toml").write_text('[characters."rambleon-birdsong"]\ngender = "male"\n')
+    monkeypatch.setattr("rambleon.config.find_repo_root", lambda: tmp_path)
+    db = to_python(parse((FIXTURES / "Rambleon_simulated.lua").read_bytes()))["RambleonDB"]
+    s = sessions_from_db(db)[0]
+    s["character"].pop("gender", None)
+    assert "Gender: male" in sm.build_prompt(s, 1, "field-journal")

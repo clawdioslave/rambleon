@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .archive import Archive, atomic_write_bytes, atomic_write_json
+from .config import character_overrides
 from .export import clock, describe, duration, export_filename, long_date, render_recap
 
 RULES_PATH = Path(__file__).parent / "prompts" / "journal.md"
@@ -34,7 +35,10 @@ SYSTEM_PROMPT = ("You are a careful writer helping a player keep a personal jour
 
 
 def build_prompt(session: dict[str, Any], chapter: int, voice: str | None = None) -> str:
-    c = session.get("character", {})
+    c = dict(session.get("character", {}))
+    for k, v in character_overrides(c.get("slug", "")).items():   # rambleon.local.toml wins over old sessions
+        if isinstance(v, (str, int, float, bool)) and k not in ("name", "slug"):
+            c[k] = v
     cnt = session.get("counters", {})
     rules = RULES_PATH.read_text(encoding="utf-8").replace("{voice}", load_voice(voice))
     people = sorted(session.get("people", []), key=lambda p: -(p.get("seconds") or 0))
