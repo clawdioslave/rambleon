@@ -57,6 +57,13 @@ def build_prompt(session: dict[str, Any], chapter: int) -> str:
             lines.append(f"- {name} × {info.get('count', 0)}")
     else:
         lines.append("- none recorded")
+    loot = [ev for ev in session.get("events", []) if ev.get("type") in ("LOOT", "EQUIP")]
+    lines += ["", "## Loot worth keeping (uncommon or better)", ""]
+    if loot:
+        for ev in loot:
+            lines.append(f"- {clock(ev.get('t'))} — {describe(ev)}")
+    else:
+        lines.append("- none")
     lines += ["", "## People met", ""]
     if people:
         for p in people:

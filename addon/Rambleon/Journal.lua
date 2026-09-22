@@ -28,6 +28,8 @@ function J.DescribeEvent(ev)
   elseif t == "SCREENSHOT" then return "Took a screenshot"
   elseif t == "NOTE" then return '"' .. tostring(ev.text) .. '"'
   elseif t == "FIRST_KILL" then return "First " .. tostring(ev.name) .. " slain"
+  elseif t == "LOOT" then return "Looted " .. tostring(ev.name) .. (ev.qualityName and (" (" .. ev.qualityName .. ")") or "")
+  elseif t == "EQUIP" then return "Equipped " .. tostring(ev.name)
   elseif t == "OBJECTIVE_COMPLETE" then
     return tostring(ev.text or "Objective complete") .. (ev.title and (" — " .. ev.title) or "")
   elseif t == "MARK" then return "Marked moment"
@@ -63,6 +65,7 @@ function J.Stats()
     deaths = c.deaths or 0,
     people = #s.people,
     kills = c.kills or 0,
+    loot = c.loot or 0,
     xp = c.xpGained or 0,
     notes = c.notes or 0,
     marks = c.marks or 0,

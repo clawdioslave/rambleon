@@ -180,7 +180,7 @@ function ns.StartSession()
     client = ns.CaptureClient(),
     counters = { levelsGained = 0, questsAccepted = 0, questsCompleted = 0, deaths = 0,
                  zonesVisited = 0, notes = 0, marks = 0, screenshots = 0, achievements = 0,
-                 kills = 0, xpGained = 0, objectivesCompleted = 0 },
+                 kills = 0, xpGained = 0, objectivesCompleted = 0, loot = 0 },
     zones = {},
     people = {},
     kills = {},                 -- name -> { count, xp, firstAt, lastAt }
@@ -515,6 +515,92 @@ function ns.ScanObjectives()
     end
   end
   ns.objectivesSeeded = true
+end
+
+-- Loot worth remembering -----------------------------------------------------
+-- Uncommon (green) or better items you receive or equip. Greys and whites are noise.
+
+local MIN_QUALITY = 2
+local QUALITY_NAMES = { [0] = "Poor", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Artifact", "Heirloom" }
+local LINK_COLORS = { ["1eff00"] = 2, ["0070dd"] = 3, ["a335ee"] = 4, ["ff8000"] = 5, ["e6cc80"] = 6, ["00ccff"] = 7 }
+
+local function itemFromLink(link)
+  if type(link) ~= "string" then return nil end
+  local color, itemID, name = link:match("|c%x%x(%x%x%x%x%x%x)|Hitem:(%d+)[^|]*|h%[([^%]]*)%]|h")
+  if not itemID then return nil end
+  itemID = tonumber(itemID)
+  local quality
+  if C_Item and C_Item.GetItemQualityByID then
+    quality = ns.Clean(ns.SafeCall(C_Item.GetItemQualityByID, itemID))
+  end
+  if type(quality) ~= "number" then quality = LINK_COLORS[color:lower()] or 1 end
+  return { itemID = itemID, name = ns.CleanString(name), quality = quality }
+end
+
+local lootPatterns
+local function buildLootPatterns()
+  if lootPatterns then return lootPatterns end
+  lootPatterns = {}
+  local formats = {}
+  for _, fmt in pairs({ LOOT_ITEM_SELF_MULTIPLE, LOOT_ITEM_PUSHED_SELF_MULTIPLE, LOOT_ITEM_CREATED_SELF_MULTIPLE,
+                        LOOT_ITEM_SELF, LOOT_ITEM_PUSHED_SELF, LOOT_ITEM_CREATED_SELF }) do
+    table.insert(formats, fmt)
+  end
+  for _, fmt in ipairs({ "You receive loot: %sx%d.", "You receive item: %sx%d.", "You create: %sx%d.",
+                         "You receive loot: %s.", "You receive item: %s.", "You create: %s." }) do
+    table.insert(formats, fmt)
+  end
+  local seen = {}
+  for _, fmt in ipairs(formats) do
+    if type(fmt) == "string" and not seen[fmt] then
+      seen[fmt] = true
+      local p = fmt:gsub("%%s", "\1"):gsub("%%d", "\2")
+      p = p:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
+      p = p:gsub("\1", "(.-)"):gsub("\2", "(%%d+)")
+      table.insert(lootPatterns, "^" .. p .. "$")
+    end
+  end
+  return lootPatterns
+end
+
+function ns.RecordLootFromChat(text)
+  text = ns.CleanString(text)
+  if not text then return end
+  local link, count
+  for _, pattern in ipairs(buildLootPatterns()) do
+    link, count = text:match(pattern)
+    if link then break end
+  end
+  if not link then return end
+  local item = itemFromLink(link)
+  if not item or item.quality < MIN_QUALITY then return end
+  local s = ns.EnsureSession()
+  if not s then return end
+  ns.AddEvent("LOOT", { itemID = item.itemID, name = item.name, quality = item.quality,
+                        qualityName = QUALITY_NAMES[item.quality], count = tonumber(count) or 1 })
+  s.counters.loot = (s.counters.loot or 0) + 1
+end
+
+ns.equippedSeen = {}
+function ns.RecordEquip(slot)
+  if type(slot) ~= "number" or not GetInventoryItemLink then return end
+  local link = ns.SafeCall(GetInventoryItemLink, "player", slot)
+  local item = itemFromLink(link)
+  if not item or item.quality < MIN_QUALITY then return end
+  local s = ns.EnsureSession()
+  if not s then return end
+  local key = slot .. ":" .. item.itemID
+  if ns.equippedSeen[key] then return end
+  ns.equippedSeen[key] = true
+  if not ns.equipSeeded then return end   -- the first pass after login just learns what is already worn
+  ns.AddEvent("EQUIP", { itemID = item.itemID, name = item.name, quality = item.quality,
+                         qualityName = QUALITY_NAMES[item.quality], slot = slot })
+end
+
+function ns.SeedEquipment()
+  ns.equipSeeded = false
+  for slot = 1, 19 do ns.RecordEquip(slot) end
+  ns.equipSeeded = true
 end
 
 -- Manual moments -------------------------------------------------------------

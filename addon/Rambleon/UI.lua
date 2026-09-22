@@ -3,7 +3,7 @@ local ADDON, ns = ...
 ns.UI = {}
 local UI = ns.UI
 
-local WIDTH, HEIGHT = 380, 540
+local WIDTH, HEIGHT = 380, 560
 local RECENT = 10
 local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
 local BODY_FONT = "Fonts\\FRIZQT__.TTF"
@@ -85,7 +85,7 @@ local function build()
   local rows = {
     { "time", "Time" }, { "area", "Current Area" }, { "level", "Level" },
     { "quests", "Quests Completed" }, { "places", "Places Visited" }, { "kills", "Enemies Slain" },
-    { "deaths", "Deaths" }, { "people", "People Met" },
+    { "loot", "Loot Worth Keeping" }, { "deaths", "Deaths" }, { "people", "People Met" },
   }
   for _, row in ipairs(rows) do
     local k = label(panel, row[2], 12, INK_SOFT)
@@ -165,6 +165,7 @@ function UI.Refresh()
     panel.stats.quests:SetText(tostring(st.questsCompleted))
     panel.stats.places:SetText(tostring(st.places))
     panel.stats.kills:SetText(tostring(st.kills))
+    panel.stats.loot:SetText(tostring(st.loot))
     panel.stats.deaths:SetText(tostring(st.deaths))
     panel.stats.people:SetText(tostring(st.people))
   end

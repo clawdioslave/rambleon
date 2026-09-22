@@ -26,7 +26,7 @@ RambleonDB = {
                     faction, guid, startLevel, endLevel },
       client = { version, build, buildDate, tocVersion, projectId, flavorHint, flavor, addonVersion, locale },
       counters = { levelsGained, questsAccepted, questsCompleted, deaths, zonesVisited, notes, marks, screenshots, achievements,
-                   kills, xpGained, objectivesCompleted },
+                   kills, xpGained, objectivesCompleted, loot },
       zones = { { zone, subzone, mapID, firstSeen, lastSeen, visits }, ... },
       people = { { name, class, classFile, firstSeen, lastSeen, seconds, joins }, ... },
       kills = { ["Timberling"] = { count = 12, xp = 540, firstAt = ..., lastAt = ... }, ... },
@@ -53,6 +53,8 @@ RambleonDB = {
 | `NOTE {text}`, `MARK` | |
 | `FIRST_KILL {name, xp}` | first time an enemy of that name gave XP this session (from the "X dies, you gain N experience." chat line; no combat log) |
 | `OBJECTIVE_COMPLETE {questID, title, text}` | a quest objective finished, e.g. "8/8 Timberling slain" |
+| `LOOT {itemID, name, quality, qualityName, count}` | an uncommon-or-better item you received (loot, quest reward, crafted); from the chat loot line |
+| `EQUIP {itemID, name, quality, qualityName, slot}` | an uncommon-or-better item equipped, once per item per session |
 
 Every event also carries `level`, and `zone`/`subzone` unless it is a zone event itself.
 

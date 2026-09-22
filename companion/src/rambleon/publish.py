@@ -125,7 +125,7 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
     recap = (journal or {}).get("recap") or render_recap(session)
     parts.append("<div class='recap'>" + html.escape(recap.strip()) + "</div>")
     stats = [("Quests", cnt.get("questsCompleted", 0)), ("Places", len(session.get("zones", []))),
-             ("Enemies slain", cnt.get("kills", 0)), ("Deaths", cnt.get("deaths", 0)),
+             ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)), ("Deaths", cnt.get("deaths", 0)),
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
     shots = session.get("screenshots", [])

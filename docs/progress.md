@@ -53,6 +53,11 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
   `/ramble save`, then exports, journals, builds the page and publishes to the game.
 - RESUMED markers are kept in the data but hidden from every rendered timeline.
 
+### Loot (player request)
+- `LOOT` events for uncommon-or-better items received (loot, quest rewards, crafted) via the chat loot line, and
+  `EQUIP` events for uncommon-or-better items equipped (once per item per session). Quality from
+  `C_Item.GetItemQualityByID`, falling back to the link colour. Panel row "Loot Worth Keeping"; export section; prompt section.
+
 ### Known issue found tonight
 - The standalone `claude` CLI on this Mac reports "OAuth access token has been revoked", so `ramble summarize` skipped
   the AI chapter and only wrote the prompt (correct degraded behaviour). Fix on the Mac: run `claude` in a terminal

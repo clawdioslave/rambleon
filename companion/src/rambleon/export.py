@@ -68,6 +68,12 @@ def describe(ev: dict[str, Any]) -> str:
         return f"Note: \"{ev.get('text')}\""
     if t == "FIRST_KILL":
         return f"First {ev.get('name')} slain"
+    if t == "LOOT":
+        q = f" ({ev['qualityName']})" if ev.get("qualityName") else ""
+        n = f" ×{ev['count']}" if (ev.get("count") or 1) > 1 else ""
+        return f"Looted {ev.get('name')}{n}{q}"
+    if t == "EQUIP":
+        return f"Equipped {ev.get('name')}" + (f" ({ev['qualityName']})" if ev.get("qualityName") else "")
     if t == "OBJECTIVE_COMPLETE":
         return f"{ev.get('text') or 'Objective complete'}" + (f" — \"{ev['title']}\"" if ev.get("title") else "")
     if t == "MARK":
@@ -111,6 +117,7 @@ def render_markdown(session: dict[str, Any]) -> str:
         f"Quests accepted: {cnt.get('questsAccepted', 0)}  ",
         f"Quests completed: {cnt.get('questsCompleted', 0)}  ",
         f"Enemies slain: {cnt.get('kills', 0)}  ",
+        f"Loot worth keeping: {cnt.get('loot', 0)}  ",
         f"Experience gained: {cnt.get('xpGained', 0):,}  ",
         f"Deaths: {cnt.get('deaths', 0)}  ",
         f"Places visited: {len(session.get('zones', []))}  ",
@@ -124,6 +131,11 @@ def render_markdown(session: dict[str, Any]) -> str:
             mins = int(round((p.get("seconds") or 0) / 60))
             cls = f" ({p['class']})" if p.get("class") else ""
             lines.append(f"* {p.get('name')}{cls} — {mins} minute{'s' if mins != 1 else ''}")
+    loot = [ev for ev in session.get("events", []) if ev.get("type") in ("LOOT", "EQUIP")]
+    if loot:
+        lines += ["", "## Loot Worth Keeping", ""]
+        for ev in loot:
+            lines.append(f"* {clock(ev.get('t'))} — {describe(ev)}")
     kills = sorted(session.get("kills", {}).items(), key=lambda kv: -(kv[1].get("count") or 0))
     if kills:
         lines += ["", "## Enemies Slain", ""]

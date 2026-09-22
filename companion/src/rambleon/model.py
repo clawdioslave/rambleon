@@ -12,11 +12,11 @@ KEEP_ALL = True
 EVENT_TYPES = {
     "SESSION_START", "RESUMED", "SESSION_END", "ZONE_ENTER", "LEVEL_UP", "QUEST_ACCEPTED", "QUEST_COMPLETED",
     "DEATH", "REVIVED", "GROUP_JOIN", "GROUP_LEAVE", "INSTANCE_ENTER", "INSTANCE_EXIT", "ACHIEVEMENT",
-    "SCREENSHOT", "NOTE", "MARK", "FIRST_KILL", "OBJECTIVE_COMPLETE",
+    "SCREENSHOT", "NOTE", "MARK", "FIRST_KILL", "OBJECTIVE_COMPLETE", "LOOT", "EQUIP",
 }
 STATES = {"active", "suspended", "ended"}
 COUNTER_KEYS = ["levelsGained", "questsAccepted", "questsCompleted", "deaths", "zonesVisited", "notes", "marks",
-                "screenshots", "achievements", "kills", "xpGained", "objectivesCompleted"]
+                "screenshots", "achievements", "kills", "xpGained", "objectivesCompleted", "loot"]
 
 
 def slugify(text: str) -> str:

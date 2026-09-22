@@ -113,6 +113,24 @@ WoW.Fire("QUEST_LOG_UPDATE"); WoW.Advance(2)
 assertEq(ns.session.counters.objectivesCompleted, 1, "objective completed once")
 assertEq(ns.session.events[#ns.session.events].type, "OBJECTIVE_COMPLETE", "objective event")
 
+-- Loot: greens and better only, quest rewards included, equips once per item
+local green = "|cff1eff00|Hitem:2044::::::::10:::::|h[Sturdy Bow]|h|r"
+local grey = "|cff9d9d9d|Hitem:3771::::::::10:::::|h[Wild Hog Shank]|h|r"
+local blue = "|cff0070dd|Hitem:2140::::::::10:::::|h[Arcane Staff]|h|r"
+WoW.Fire("CHAT_MSG_LOOT", "You receive loot: " .. grey .. ".")
+WoW.Fire("CHAT_MSG_LOOT", "You receive loot: " .. green .. ".")
+WoW.Fire("CHAT_MSG_LOOT", "You receive item: " .. blue .. "x2.")
+WoW.Fire("CHAT_MSG_LOOT", "Moonhoof receives loot: " .. green .. ".")
+assertEq(ns.session.counters.loot, 2, "loot count")
+assertEq(ns.session.events[#ns.session.events].name, "Arcane Staff", "loot name")
+assertEq(ns.session.events[#ns.session.events].quality, 3, "loot quality from link colour")
+WoW.state.equipped[16] = blue
+WoW.Fire("PLAYER_EQUIPMENT_CHANGED", 16, true)
+WoW.Fire("PLAYER_EQUIPMENT_CHANGED", 16, true)
+local equips = 0
+for _, ev in ipairs(ns.session.events) do if ev.type == "EQUIP" then equips = equips + 1 end end
+assertEq(equips, 1, "one equip event")
+
 -- Screenshot + achievement + instance
 WoW.Fire("SCREENSHOT_SUCCEEDED")
 WoW.Fire("ACHIEVEMENT_EARNED", 6)

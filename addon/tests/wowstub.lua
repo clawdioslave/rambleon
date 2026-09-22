@@ -52,6 +52,12 @@ function IsInRaid() return false end
 function GetNumGroupMembers() local n = 0; for _ in pairs(WoW.state.group) do n = n + 1 end; return n > 0 and n + 1 or 0 end
 function GetAchievementInfo(id) return id, "Level 10", nil end
 function UnitXP() return WoW.state.xp or 0 end
+LOOT_ITEM_SELF = "You receive loot: %s."
+LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d."
+LOOT_ITEM_PUSHED_SELF = "You receive item: %s."
+C_Item = { GetItemQualityByID = function(id) return WoW.state.itemQuality and WoW.state.itemQuality[id] end }
+WoW.state.equipped = {}
+function GetInventoryItemLink(unit, slot) return WoW.state.equipped[slot] end
 function UnitXPMax() return WoW.state.xpMax or 1000 end
 COMBATLOG_XPGAIN_FIRSTPERSON = "%s dies, you gain %d experience."
 COMBATLOG_XPGAIN_FIRSTPERSON_GROUP = "%s dies, you gain %d experience. (+%d group bonus)"

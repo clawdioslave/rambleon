@@ -84,6 +84,7 @@ handlers.PLAYER_ENTERING_WORLD = function(isLogin, isReload)
     ns.StartHeartbeat()
   end
   ns.SeedXP()
+  if not ns.equipSeeded then ns.SeedEquipment() end
   ns.inInstance = nil
   checkInstance()
   scheduleZoneCheck()
@@ -93,6 +94,14 @@ end
 
 handlers.CHAT_MSG_COMBAT_XP_GAIN = function(text)
   ns.RecordKillFromChat(text)
+end
+
+handlers.CHAT_MSG_LOOT = function(text)
+  ns.RecordLootFromChat(text)
+end
+
+handlers.PLAYER_EQUIPMENT_CHANGED = function(slot, hasItem)
+  if hasItem then ns.RecordEquip(slot) end
 end
 
 handlers.PLAYER_XP_UPDATE = function(unit)

@@ -93,6 +93,7 @@ def test_markdown_export_is_factual():
     assert "this cave is extremely cursed" in md
     assert "## Enemies Slain" in md and "Timberling × 2" in md
     assert "First Grell slain" in md and "8/8 Timberling slain" in md
+    assert "## Loot Worth Keeping" in md and "Looted Arcane Staff ×2 (Rare)" in md and "Equipped Arcane Staff" in md
 
 
 def test_prompt_and_split():
