@@ -25,8 +25,11 @@ def test_normalize_sessions():
     assert ended["counters"]["questsCompleted"] == 1
     assert [e["t"] for e in ended["events"]] == sorted(e["t"] for e in ended["events"])
     assert ended["id"] != suspended["id"]
-    # the fixture was generated moments ago, so the suspended session is still resumable
-    assert suspended["state"] == "suspended" and suspended["addonState"] == "suspended"
+    # seen a few seconds ago (pinned clock) → still resumable
+    from rambleon.normalize import normalize_session
+    raw = to_python(parse((FIXTURES / "Rambleon_simulated.lua").read_bytes()))["RambleonDB"]["sessions"][1]
+    fresh = normalize_session(raw, now=raw["lastSeen"] + 10)
+    assert fresh["state"] == "suspended" and fresh["addonState"] == "suspended"
 
 
 def test_stale_suspended_session_becomes_ended():
