@@ -124,6 +124,7 @@ WoW.Fire("CHAT_MSG_LOOT", "Moonhoof receives loot: " .. green .. ".")
 assertEq(ns.session.counters.loot, 2, "loot count")
 assertEq(ns.session.events[#ns.session.events].name, "Arcane Staff", "loot name")
 assertEq(ns.session.events[#ns.session.events].quality, 3, "loot quality from link colour")
+assertEq(ns.session.events[#ns.session.events].count, 2, "loot count from x2")
 WoW.state.equipped[16] = blue
 WoW.Fire("PLAYER_EQUIPMENT_CHANGED", 16, true)
 WoW.Fire("PLAYER_EQUIPMENT_CHANGED", 16, true)

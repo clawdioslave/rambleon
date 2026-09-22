@@ -550,16 +550,19 @@ local function buildLootPatterns()
                          "You receive loot: %s.", "You receive item: %s.", "You create: %s." }) do
     table.insert(formats, fmt)
   end
-  local seen = {}
+  -- Patterns with a quantity must be tried first, or "…x2." is swallowed by the singular form.
+  local seen, multiples, singles = {}, {}, {}
   for _, fmt in ipairs(formats) do
     if type(fmt) == "string" and not seen[fmt] then
       seen[fmt] = true
       local p = fmt:gsub("%%s", "\1"):gsub("%%d", "\2")
       p = p:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
       p = p:gsub("\1", "(.-)"):gsub("\2", "(%%d+)")
-      table.insert(lootPatterns, "^" .. p .. "$")
+      table.insert(fmt:find("%%d") and multiples or singles, "^" .. p .. "$")
     end
   end
+  for _, p in ipairs(multiples) do table.insert(lootPatterns, p) end
+  for _, p in ipairs(singles) do table.insert(lootPatterns, p) end
   return lootPatterns
 end
 
