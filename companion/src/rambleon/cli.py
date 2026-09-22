@@ -23,7 +23,7 @@ from .notify import notify
 from .publish import export_html, publish_chapters, write_html_index
 from .watch import Finalizer
 from .wowstate import logged_out_since
-from .summarize import DEFAULT_MODEL, summarize as run_summarize
+from .summarize import DEFAULT_MODEL, DEFAULT_VOICE, available_voices, summarize as run_summarize
 from .watch import ingest_once, reprocess as run_reprocess, watch as run_watch
 
 app = typer.Typer(help="Rambleon — your Azeroth adventure journal, Mac side.", no_args_is_help=True, add_completion=False)
@@ -91,14 +91,14 @@ def install(copy: bool = typer.Option(False, "--copy", help="Copy the AddOn inst
     console.print("Now /reload in WoW (or restart it if Rambleon was not loaded before).")
 
 
-def _finish_night(archive: Archive, paths, use_ai: bool, model: str):
+def _finish_night(archive: Archive, paths, use_ai: bool, model: str, voice: str | None = None):
     """What happens when a night is over: export, journal, HTML, publish to the game."""
     def run(session: dict) -> None:
         night = resolve_night(archive, session["id"]) or session
         md = export_session(night, paths.exports_dir)
         log(f"exported {md.name}")
         if use_ai:
-            run_summarize(night, archive, paths.exports_dir, use_ai=True, model=model, log=log)
+            run_summarize(night, archive, paths.exports_dir, use_ai=True, model=model, log=log, voice=voice)
         page = export_html(night, archive, paths.exports_dir)
         log(f"story page {page}")
         write_html_index(archive, paths.exports_dir)
@@ -115,14 +115,15 @@ def watch(interval: float = typer.Option(1.0, help="Seconds between polls."),
           copy_screenshots: bool = typer.Option(False, "--copy-screenshots", help="Copy matching screenshots into the archive."),
           no_ai: bool = typer.Option(False, "--no-ai", help="Do not call the Claude CLI when a chapter ends."),
           no_auto: bool = typer.Option(False, "--no-auto", help="Only archive; skip export/journal/publish."),
-          model: str = typer.Option(DEFAULT_MODEL, "--model")) -> None:
+          model: str = typer.Option(DEFAULT_MODEL, "--model"),
+          voice: str = typer.Option(None, "--voice", help="Journal voice profile (see `ramble voices`).")) -> None:
     """Watch SavedVariables and archive every session WoW writes. Leave this running while you play.
     When a chapter ends it also exports it, writes the journal, builds the story page and publishes it to the game."""
     archive, paths = _archive()
     if paths.wow_dir is None:
         console.print("[red]WoW directory not found[/red] (set RAMBLEON_WOW_DIR)")
         raise typer.Exit(1)
-    finalizer = None if no_auto else Finalizer(_finish_night(archive, paths, use_ai=not no_ai, model=model), log,
+    finalizer = None if no_auto else Finalizer(_finish_night(archive, paths, use_ai=not no_ai, model=model, voice=voice), log,
                                                logged_out=lambda since: logged_out_since(paths.wow_dir, since))
     try:
         run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots,
@@ -164,6 +165,14 @@ def service_uninstall() -> None:
 def service_status() -> None:
     """Is the background watcher installed and running?"""
     console.print(svc.status())
+
+
+@app.command()
+def voices() -> None:
+    """List journal voice profiles (companion/src/rambleon/prompts/voices/*.md). Default: golden."""
+    for v in available_voices():
+        marker = " (default)" if v == DEFAULT_VOICE else ""
+        console.print(f"{v}{marker}")
 
 
 @app.command()
@@ -279,11 +288,16 @@ def export(ref: str = typer.Argument("latest"), all_nights: bool = typer.Option(
 @app.command()
 def summarize(ref: str = typer.Argument("latest"),
               no_ai: bool = typer.Option(False, "--no-ai", help="Only write the prompt; do not call the Claude CLI."),
-              model: str = typer.Option(DEFAULT_MODEL, "--model")) -> None:
+              model: str = typer.Option(DEFAULT_MODEL, "--model"),
+              voice: str = typer.Option(None, "--voice", help="Journal voice profile (see `ramble voices`).")) -> None:
     """Write the journal prompt for a night and, if the Claude CLI is available, the AI-written chapter."""
     archive, paths = _archive()
     session = _night(ref)
-    result = run_summarize(session, archive, paths.exports_dir, use_ai=not no_ai, model=model, log=log)
+    try:
+        result = run_summarize(session, archive, paths.exports_dir, use_ai=not no_ai, model=model, log=log, voice=voice)
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
     for k, v in result.items():
         if v:
             console.print(f"{k}: {v}")

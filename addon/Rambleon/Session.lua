@@ -73,6 +73,8 @@ function ns.CaptureCharacter()
   local class, classFile = ns.SafeCall(UnitClass, "player")
   c.class, c.classFile = ns.CleanString(class), ns.CleanString(classFile)
   c.faction = ns.CleanString(ns.SafeCall(UnitFactionGroup, "player"))
+  local sex = ns.Clean(ns.SafeCall(UnitSex, "player"))     -- 2 = male, 3 = female, 1 = unknown
+  c.gender = (sex == 2 and "male") or (sex == 3 and "female") or nil
   c.guid = ns.CleanString(ns.SafeCall(UnitGUID, "player"))
   c.startLevel = ns.Clean(ns.SafeCall(UnitLevel, "player"))
   c.endLevel = c.startLevel

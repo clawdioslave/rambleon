@@ -39,3 +39,13 @@ def test_recap_wording():
     s = sessions_from_db(db)[0]
     recap = render_recap(s)
     assert recap.startswith("6m in Azeroth tonight.") and recap.rstrip().endswith("Ramble on.")
+
+
+def test_voices():
+    from rambleon.summarize import available_voices, build_prompt, load_voice
+    db = to_python(parse((FIXTURES / "Rambleon_simulated.lua").read_bytes()))["RambleonDB"]
+    s = sessions_from_db(db)[0]
+    assert {"golden", "field-journal"} <= set(available_voices())
+    assert "Christie Golden" in load_voice("golden")
+    assert "{voice}" not in build_prompt(s, 1, "field-journal")
+    assert "field journal" in build_prompt(s, 1, "field-journal")

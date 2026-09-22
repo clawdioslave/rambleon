@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -12,21 +13,39 @@ from .archive import Archive, atomic_write_bytes, atomic_write_json
 from .export import clock, describe, duration, export_filename, long_date, render_recap
 
 RULES_PATH = Path(__file__).parent / "prompts" / "journal.md"
+VOICES_DIR = Path(__file__).parent / "prompts" / "voices"
+DEFAULT_VOICE = "golden"
+
+
+def available_voices() -> list[str]:
+    return sorted(p.stem for p in VOICES_DIR.glob("*.md"))
+
+
+def load_voice(name: str | None) -> str:
+    name = name or os.environ.get("RAMBLEON_VOICE") or DEFAULT_VOICE
+    path = VOICES_DIR / f"{name}.md"
+    if not path.exists():
+        raise ValueError(f"unknown voice {name!r}; available: {', '.join(available_voices())}")
+    return path.read_text(encoding="utf-8").strip()
 RECAP_MARKER = "---RECAP---"
 DEFAULT_MODEL = "sonnet"
 SYSTEM_PROMPT = ("You are a careful writer helping a player keep a personal journal of their World of Warcraft "
                  "adventures. Follow the instructions in the message exactly. Output only the requested text.")
 
 
-def build_prompt(session: dict[str, Any], chapter: int) -> str:
+def build_prompt(session: dict[str, Any], chapter: int, voice: str | None = None) -> str:
     c = session.get("character", {})
     cnt = session.get("counters", {})
-    rules = RULES_PATH.read_text(encoding="utf-8")
+    rules = RULES_PATH.read_text(encoding="utf-8").replace("{voice}", load_voice(voice))
     people = sorted(session.get("people", []), key=lambda p: -(p.get("seconds") or 0))
     lines = [rules.replace("{chapter}", str(chapter)), "", "=" * 72, "", "## Character", ""]
     lines.append(f"- Name: {c.get('displayName')}")
     if c.get("race") or c.get("class"):
         lines.append(f"- {c.get('race', '')} {c.get('class', '')}".rstrip())
+    if c.get("gender"):
+        lines.append(f"- Gender: {c['gender']} (use matching pronouns)")
+    else:
+        lines.append("- Gender: not recorded — refer to the character by name or with they/them, never guess")
     lines.append(f"- Level at start: {c.get('startLevel')}; level at end: {c.get('endLevel')}")
     lines.append(f"- Game: World of Warcraft: Forever (client {session.get('client', {}).get('version', '?')})")
     lines += ["", "## Session", "", f"- Date: {long_date(session.get('startedAt'))}",
@@ -141,10 +160,10 @@ def split_output(text: str) -> tuple[str, str | None]:
 
 
 def summarize(session: dict[str, Any], archive: Archive, exports_dir: Path, use_ai: bool = True,
-              model: str = DEFAULT_MODEL, log=print) -> dict[str, Path | None]:
+              model: str = DEFAULT_MODEL, log=print, voice: str | None = None) -> dict[str, Path | None]:
     from .nights import chapter_number
     chapter = chapter_number(archive, session) if session.get("kind") == "night" else archive.chapter_number(session)
-    prompt = build_prompt(session, chapter)
+    prompt = build_prompt(session, chapter, voice)
     prompt_path = exports_dir / "prompts" / export_filename(session, "-prompt")
     atomic_write_bytes(prompt_path, prompt.encode("utf-8"))
     result: dict[str, Path | None] = {"prompt": prompt_path, "journal": None, "recap": None}
@@ -167,7 +186,8 @@ def summarize(session: dict[str, Any], archive: Archive, exports_dir: Path, use_
             break
     atomic_write_json(exports_dir / "journal" / f"{session['id']}.json", {
         "sessionId": session["id"], "chapter": chapter, "title": title, "journal": journal,
-        "recap": recap or render_recap(session), "model": model, "createdAt": int(__import__("time").time()),
+        "recap": recap or render_recap(session), "model": model, "voice": voice or os.environ.get("RAMBLEON_VOICE") or DEFAULT_VOICE,
+        "createdAt": int(__import__("time").time()),
     })
     journal_path = exports_dir / "markdown" / export_filename(session, "-journal")
     header = f"_{session.get('character', {}).get('displayName')} · {long_date(session.get('startedAt'))} · {duration(session.get('playedSeconds'))} in Azeroth_\n\n"

@@ -42,6 +42,7 @@ function GetNormalizedRealmName() return nil end
 function UnitRace() return "Night Elf", "NightElf" end
 function UnitClass(unit) if unit == "player" then return "Druid", "DRUID" end local g = WoW.state.group[unit]; if g then return g.class, g.class:upper() end end
 function UnitFactionGroup() return "Alliance", "Alliance" end
+function UnitSex() return 3 end
 function UnitGUID() return "Player-70-000ABCDE" end
 function UnitLevel() return WoW.state.level end
 function UnitIsDeadOrGhost() return WoW.state.dead end

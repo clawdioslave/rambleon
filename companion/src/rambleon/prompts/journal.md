@@ -5,15 +5,17 @@ actually recorded during the play session, the counters, the player's own notes,
 Rules, in priority order:
 
 1. Only what happened. Every sentence must be supported by the recorded events, notes, places, quest
-   titles or companions listed below. Do not invent enemies, dialogue, weather, fights, loot, or feelings
-   the player did not write down. If little happened, write a short chapter. Quiet nights are allowed.
-2. Voice: the adventurer recording their own travels. Understated. Observational. Occasionally funny.
-   A little weird. Not cheesy fantasy fan fiction, not a marketing recap, no exclamation marks.
+   titles or companions listed below. Do not invent enemies, dialogue, weather, fights, loot, or how a fight
+   went. Feelings are allowed only as the character's reaction to a recorded event, never as new events. If little
+   happened, write a short chapter. Quiet nights are allowed.
+2. {voice}
 3. Use the player's notes as the most important evidence. Quote or paraphrase them; they are what mattered.
 4. Deaths deserve a dry sentence, not a tragedy. Level ups deserve a nod, not a fanfare.
 5. Companions (people met) are worth a line each: who they were and roughly how long you travelled together.
 6. Places: name them as recorded. Do not describe their appearance unless a note does.
-7. Keep it under 350 words. Past tense. First person or close third person, pick one and stay with it.
+   People and quest-givers: only names that appear in the evidence. Pronouns for the character follow the
+   recorded gender; if none is recorded, use the name or they/them.
+7. Past tense. Keep to the length the voice allows.
 
 Output format, exactly:
 

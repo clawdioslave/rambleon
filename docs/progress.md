@@ -69,6 +69,17 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - The stale terminal watcher was replaced by a background `ramble watch` (log: `~/Library/Logs/Rambleon/watch.log`).
 - `docs/roadmap.md`: the product plan.
 
+### 2026-09-22
+- Overnight: logout detection fired 5 s after the 23:35 write; chapter exported, page built, published. AI skipped
+  (CLI logged out). Background watcher did not survive the night → player installed `ramble service` (launchd).
+- Player logged the Claude CLI in; first AI chapter written. Every specific checked out against the log except one
+  flourish ("didn't put up much of a fight").
+- Voice profiles: `prompts/voices/*.md`, `ramble voices`, `--voice`, `RAMBLEON_VOICE`. Default is now `golden`
+  (a Christie Golden-style warm close third person) at the player's request; `field-journal` is the original.
+- Golden draft invented a quest-giver (Loganaar) and guessed the character's gender. Fixes: rule 6 now forbids
+  names not in the evidence; the AddOn records `character.gender` from `UnitSex`; the prompt says to use the
+  name or they/them when gender is not recorded.
+
 ### To verify next session
 - Loot capture in the real client (the three greens came before the loot code was loaded; no LOOT events yet).
 - Whether `/ramble chapters` shows tonight's chapter after login (published at 23:27, republished after reprocess).
