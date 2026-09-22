@@ -89,9 +89,6 @@ def build_night(sessions: list[dict[str, Any]]) -> dict[str, Any]:
                 best, idx = d, i
         sh["nearestEventIndex"], sh["nearestEventSeconds"] = idx, best
     night["counters"]["zonesVisited"] = len(night["zones"])
-    if night["state"] == "open":
-        # a suspended tail that is old enough counts as over
-        night["state"] = "ended" if all(s.get("state") in ("ended",) or True for s in sessions) else "open"
     return night
 
 
