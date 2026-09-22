@@ -48,6 +48,13 @@ def build_prompt(session: dict[str, Any], chapter: int) -> str:
     for z in session.get("zones", []):
         label = f"{z.get('subzone')} ({z.get('zone')})" if z.get("subzone") else str(z.get("zone"))
         lines.append(f"- {label} (visits: {z.get('visits', 1)})")
+    kills = sorted(session.get("kills", {}).items(), key=lambda kv: -(kv[1].get("count") or 0))
+    lines += ["", "## Enemies slain (from experience messages; only kills that gave XP)", ""]
+    if kills:
+        for name, info in kills:
+            lines.append(f"- {name} × {info.get('count', 0)}")
+    else:
+        lines.append("- none recorded")
     lines += ["", "## People met", ""]
     if people:
         for p in people:
@@ -75,6 +82,7 @@ def build_prompt(session: dict[str, Any], chapter: int) -> str:
               f"- quests: {cnt.get('questsCompleted', 0)}",
               f"- places: {len(session.get('zones', []))}",
               f"- deaths: {cnt.get('deaths', 0)}",
+              f"- enemies slain: {cnt.get('kills', 0)}",
               f"- people: {len(people)}", ""]
     return "\n".join(lines)
 

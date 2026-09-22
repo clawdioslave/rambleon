@@ -80,6 +80,32 @@ ns.HandleSlash("debug")
 assertEq(ns.session.counters.notes, 1, "notes")
 assertEq(ns.session.counters.marks, 1, "marks")
 
+-- Kills via the XP chat line (no combat log)
+WoW.Fire("CHAT_MSG_COMBAT_XP_GAIN", "Timberling dies, you gain 45 experience.")
+WoW.Fire("CHAT_MSG_COMBAT_XP_GAIN", "Timberling dies, you gain 45 experience. (+9 group bonus)")
+WoW.Fire("CHAT_MSG_COMBAT_XP_GAIN", "Grell dies, you gain 50 experience.")
+WoW.Fire("CHAT_MSG_COMBAT_XP_GAIN", "You gain 200 experience.")   -- not a kill
+assertEq(ns.session.counters.kills, 3, "kills")
+assertEq(ns.session.kills["Timberling"].count, 2, "timberling count")
+assertEq(ns.session.kills["Timberling"].xp, 90, "timberling xp")
+local firstKills = 0
+for _, ev in ipairs(ns.session.events) do if ev.type == "FIRST_KILL" then firstKills = firstKills + 1 end end
+assertEq(firstKills, 2, "first kills")
+
+-- XP accounting across a level-up
+WoW.state.xp, WoW.state.xpMax = 950, 1000; WoW.Fire("PLAYER_XP_UPDATE", "player")
+WoW.state.level = 12; WoW.state.xp, WoW.state.xpMax = 100, 1200; WoW.Fire("PLAYER_LEVEL_UP", 12)
+assertEq(ns.session.counters.xpGained, 50 + 50 + 100, "xp gained")
+
+-- Quest objectives: first scan seeds silently, later completions are events
+WoW.state.questLog = { { questID = 124, title = "Precious Waters", objectives = { { text = "0/8 Timberling slain", finished = false } } } }
+WoW.Fire("UNIT_QUEST_LOG_CHANGED", "player"); WoW.Advance(2)
+WoW.state.questLog[1].objectives[1] = { text = "8/8 Timberling slain", finished = true }
+WoW.Fire("UNIT_QUEST_LOG_CHANGED", "player"); WoW.Advance(2)
+WoW.Fire("QUEST_LOG_UPDATE"); WoW.Advance(2)
+assertEq(ns.session.counters.objectivesCompleted, 1, "objective completed once")
+assertEq(ns.session.events[#ns.session.events].type, "OBJECTIVE_COMPLETE", "objective event")
+
 -- Screenshot + achievement + instance
 WoW.Fire("SCREENSHOT_SUCCEEDED")
 WoW.Fire("ACHIEVEMENT_EARNED", 6)
@@ -97,6 +123,27 @@ assertEq(ns.session.state, "ended", "ended")
 assert(WoW.reloadCalled, "reload attempted")
 assert(ns.session.playedSeconds >= 390, "played seconds")
 local ended = ns.session
+
+-- A /reload with a restored DB resumes the session without duplicating the roster or zone
+do
+  local saved = ns.session
+  ns.session = nil
+  ns.enteredWorld = false
+  ns.lastZoneKey = nil
+  ns.currentGroup = {}
+  saved.state = "suspended"; saved.lastSeen = ns.Now()
+  WoW.state.group.party1 = { name = "Moonhoof", class = "Druid" }
+  WoW.state.subzone = "Dolanaar"
+  local before = #saved.events
+  WoW.Fire("PLAYER_ENTERING_WORLD", false, true); WoW.Advance(2)
+  assert(ns.session == saved, "resumed the suspended session")
+  assertEq(ns.session.events[before + 1].type, "RESUMED", "resumed event")
+  assertEq(#ns.session.events, before + 1, "no duplicate join/zone after resume")
+  WoW.state.group.party1 = nil
+  WoW.Fire("GROUP_ROSTER_UPDATE")
+  assertEq(ns.session.events[#ns.session.events].type, "GROUP_LEAVE", "leave still detected after resume")
+  ns.UI.EndChapterAndReload()
+end
 
 -- Marking after an ended chapter starts a fresh chapter automatically
 ns.HandleSlash("mark")

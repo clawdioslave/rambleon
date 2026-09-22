@@ -87,7 +87,11 @@ class _Parser:
         while self.pos < self.length:
             m = _TOKEN.match(self.text, self.pos)
             if not m:
-                raise LuaParseError(f"unexpected character {self.text[self.pos]!r}", self.pos, self._line())
+                ch = self.text[self.pos]
+                if ch in ('"', "'"):
+                    # An unterminated string can only happen if the file ends mid-write.
+                    raise TornFile("unterminated string at end of file", self.pos, self._line())
+                raise LuaParseError(f"unexpected character {ch!r}", self.pos, self._line())
             self.pos = m.end()
             kind = m.lastgroup
             if kind in ("ws", "comment"):

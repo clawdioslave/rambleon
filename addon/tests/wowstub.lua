@@ -23,7 +23,7 @@ WoW.frames = {}
 WoW.chat = {}
 WoW.state = {
   zone = "Teldrassil", subzone = "Shadowglen", mapID = 57, inInstance = false, instanceType = "none",
-  level = 10, dead = false, group = {}, questTitles = { [123] = "The Emerald Dreamcatcher", [124] = "Precious Waters" },
+  level = 10, xp = 900, xpMax = 1000, dead = false, group = {}, questTitles = { [123] = "The Emerald Dreamcatcher", [124] = "Precious Waters" },
 }
 
 function GetTime() return WoW.clock end
@@ -51,6 +51,11 @@ function IsInGroup() return next(WoW.state.group) ~= nil end
 function IsInRaid() return false end
 function GetNumGroupMembers() local n = 0; for _ in pairs(WoW.state.group) do n = n + 1 end; return n > 0 and n + 1 or 0 end
 function GetAchievementInfo(id) return id, "Level 10", nil end
+function UnitXP() return WoW.state.xp or 0 end
+function UnitXPMax() return WoW.state.xpMax or 1000 end
+COMBATLOG_XPGAIN_FIRSTPERSON = "%s dies, you gain %d experience."
+COMBATLOG_XPGAIN_FIRSTPERSON_GROUP = "%s dies, you gain %d experience. (+%d group bonus)"
+WoW.state.questLog = {}   -- list of { questID=, title=, objectives = { {text=, finished=} } }
 function PlaySound() end
 function StaticPopup_Show(name) WoW.lastPopup = name; return {} end
 function ReloadUI() WoW.reloadCalled = true end
@@ -61,7 +66,12 @@ C_Map = {
   GetBestMapForUnit = function() return WoW.state.mapID end,
   GetPlayerMapPosition = function() return { GetXY = function() return 0.4567, 0.7891 end } end,
 }
-C_QuestLog = { GetTitleForQuestID = function(id) return WoW.state.questTitles[id] end }
+C_QuestLog = {
+  GetTitleForQuestID = function(id) return WoW.state.questTitles[id] end,
+  GetNumQuestLogEntries = function() return #WoW.state.questLog end,
+  GetInfo = function(i) local q = WoW.state.questLog[i]; return q and { questID = q.questID, title = q.title, isHeader = false } end,
+  GetQuestObjectives = function(id) for _, q in ipairs(WoW.state.questLog) do if q.questID == id then return q.objectives end end end,
+}
 C_UI = { Reload = function() WoW.reloadCalled = true end }
 C_Timer = {
   After = function(delay, fn) table.insert(WoW.timers, { at = WoW.clock + delay, fn = fn }) end,

@@ -1,5 +1,5 @@
 <Bindings>
-  <Binding name="RAMBLEON_TOGGLE" category="ADDONS" header="RAMBLEON">
+  <Binding name="RAMBLEON_TOGGLE" category="ADDONS">
     Rambleon.Toggle()
   </Binding>
   <Binding name="RAMBLEON_MARK" category="ADDONS">

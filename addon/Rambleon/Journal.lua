@@ -27,6 +27,9 @@ function J.DescribeEvent(ev)
   elseif t == "ACHIEVEMENT" then return "Achievement: " .. tostring(ev.name)
   elseif t == "SCREENSHOT" then return "Took a screenshot"
   elseif t == "NOTE" then return '"' .. tostring(ev.text) .. '"'
+  elseif t == "FIRST_KILL" then return "First " .. tostring(ev.name) .. " slain"
+  elseif t == "OBJECTIVE_COMPLETE" then
+    return tostring(ev.text or "Objective complete") .. (ev.title and (" — " .. ev.title) or "")
   elseif t == "MARK" then return "Marked moment"
   end
   return t
@@ -58,6 +61,8 @@ function J.Stats()
     places = #s.zones,
     deaths = c.deaths or 0,
     people = #s.people,
+    kills = c.kills or 0,
+    xp = c.xpGained or 0,
     notes = c.notes or 0,
     marks = c.marks or 0,
     levelsGained = c.levelsGained or 0,
@@ -82,7 +87,7 @@ end
 function J.StatusLine()
   local st = J.Stats()
   if not st then return "no session yet" end
-  return string.format("%s in %s — Lv %s · %d quests · %d places · %d deaths · %d people · %d notes",
+  return string.format("%s in %s — Lv %s · %d quests · %d places · %d kills · %d deaths · %d people · %d notes",
     ns.FormatDuration(st.played), tostring(st.area), tostring(st.level), st.questsCompleted, st.places,
-    st.deaths, st.people, st.notes + st.marks)
+    st.kills, st.deaths, st.people, st.notes + st.marks)
 end

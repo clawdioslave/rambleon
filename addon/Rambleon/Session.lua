@@ -15,6 +15,10 @@ ns.inInstance = nil
 ns.isDead = false
 ns.dbRestored = false
 ns.dirty = false               -- UI refresh hint
+ns.resumed = false
+ns.lastXP, ns.lastXPMax = nil, nil
+ns.doneObjectives = {}
+ns.objectivesSeeded = false
 
 function ns.InitDB()
   if type(RambleonDB) == "table" then
@@ -150,11 +154,17 @@ function ns.StartSession()
   local resumed = findResumable(character)
   ns.playedAnchor = GetTime()
   ns.currentGroup = {}
+  ns.resumed = false
+  ns.doneObjectives = {}
+  ns.objectivesSeeded = false
   if resumed then
     ns.session = resumed
     resumed.state = "active"
     resumed.resumes = (resumed.resumes or 0) + 1
+    resumed.kills = resumed.kills or {}
+    ns.resumed = true
     ns.AddEvent("RESUMED", {})
+    ns.SeedFromSession()
     ns.Debug("resumed session " .. resumed.id)
     return resumed
   end
@@ -169,9 +179,11 @@ function ns.StartSession()
     character = character,
     client = ns.CaptureClient(),
     counters = { levelsGained = 0, questsAccepted = 0, questsCompleted = 0, deaths = 0,
-                 zonesVisited = 0, notes = 0, marks = 0, screenshots = 0, achievements = 0 },
+                 zonesVisited = 0, notes = 0, marks = 0, screenshots = 0, achievements = 0,
+                 kills = 0, xpGained = 0, objectivesCompleted = 0 },
     zones = {},
     people = {},
+    kills = {},                 -- name -> { count, xp, firstAt, lastAt }
     events = {},
     failedEvents = {},
   }
@@ -183,6 +195,20 @@ function ns.StartSession()
   ns.AddEvent("SESSION_START", {})
   ns.Debug("new session " .. s.id)
   return s
+end
+
+-- After a resume, remember where we were and who we were with so nothing is logged twice.
+function ns.SeedFromSession()
+  local s = ns.session
+  if not s then return end
+  for i = #s.events, 1, -1 do
+    local ev = s.events[i]
+    if ev.type == "ZONE_ENTER" and ev.zone then
+      ns.lastZoneKey = ev.zone .. "|" .. (ev.subzone or "")
+      break
+    end
+  end
+  ns.UpdateRoster(true)
 end
 
 -- Any recorder call goes through this: after END CHAPTER (without a reload) a new chapter starts.
@@ -264,6 +290,7 @@ end
 
 local COUNTER_FOR = {
   LEVEL_UP = "levelsGained", QUEST_ACCEPTED = "questsAccepted", QUEST_COMPLETED = "questsCompleted",
+  -- FIRST_KILL and OBJECTIVE_COMPLETE keep their own counters (kills, objectivesCompleted)
   DEATH = "deaths", NOTE = "notes", MARK = "marks", SCREENSHOT = "screenshots", ACHIEVEMENT = "achievements",
 }
 
@@ -331,7 +358,7 @@ function ns.FindPerson(name)
   return nil
 end
 
-function ns.UpdateRoster()
+function ns.UpdateRoster(silent)
   local s = ns.EnsureSession()
   if not s then return end
   local present = {}
@@ -360,9 +387,11 @@ function ns.UpdateRoster()
               firstSeen = ns.Now(), lastSeen = ns.Now(), seconds = 0, joins = 0 }
         table.insert(s.people, p)
       end
-      p.joins = (p.joins or 0) + 1
       p.lastSeen = ns.Now()
-      ns.AddEvent("GROUP_JOIN", { name = name, class = info.class })
+      if not silent then
+        p.joins = (p.joins or 0) + 1
+        ns.AddEvent("GROUP_JOIN", { name = name, class = info.class })
+      end
     end
   end
   for name, g in pairs(ns.currentGroup) do
@@ -376,6 +405,116 @@ function ns.UpdateRoster()
       ns.AddEvent("GROUP_LEAVE", { name = name })
     end
   end
+end
+
+-- Kills and experience --------------------------------------------------------
+-- Source: the "X dies, you gain N experience." chat line. Only XP-granting kills are visible this way;
+-- Rambleon never touches the combat log.
+
+local xpPatterns
+local function buildXpPatterns()
+  if xpPatterns then return xpPatterns end
+  xpPatterns = {}
+  -- Client globals first (localised), English fallbacks after. Nil globals must not stop the loop.
+  local formats = {}
+  for _, fmt in pairs({ COMBATLOG_XPGAIN_FIRSTPERSON_GROUP, COMBATLOG_XPGAIN_FIRSTPERSON_RAID, COMBATLOG_XPGAIN_FIRSTPERSON }) do
+    table.insert(formats, fmt)
+  end
+  table.insert(formats, "%s dies, you gain %d experience. (+%d group bonus)")
+  table.insert(formats, "%s dies, you gain %d experience. (+%d raid bonus)")
+  table.insert(formats, "%s dies, you gain %d experience.")
+  local seen = {}
+  for _, fmt in ipairs(formats) do
+    if type(fmt) == "string" and not seen[fmt] then
+      seen[fmt] = true
+      local p = fmt:gsub("%%s", "\1"):gsub("%%d", "\2")
+      p = p:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
+      p = p:gsub("\1", "(.-)"):gsub("\2", "(%%d+)")
+      table.insert(xpPatterns, "^" .. p .. "$")
+    end
+  end
+  return xpPatterns
+end
+
+function ns.RecordKillFromChat(text)
+  text = ns.CleanString(text)
+  if not text then return end
+  local s = ns.EnsureSession()
+  if not s then return end
+  local name, xp
+  for _, pattern in ipairs(buildXpPatterns()) do
+    name, xp = text:match(pattern)
+    if name then break end
+  end
+  if not name or name == "" then return end
+  xp = tonumber(xp) or 0
+  s.kills = s.kills or {}
+  local k = s.kills[name]
+  if not k then
+    k = { count = 0, xp = 0, firstAt = ns.Now(), lastAt = ns.Now() }
+    s.kills[name] = k
+    ns.AddEvent("FIRST_KILL", { name = name, xp = xp })
+  end
+  k.count = k.count + 1
+  k.xp = k.xp + xp
+  k.lastAt = ns.Now()
+  s.counters.kills = (s.counters.kills or 0) + 1
+  s.lastSeen = ns.Now()
+  ns.dirty = true
+end
+
+function ns.SeedXP()
+  ns.lastXP = ns.Clean(ns.SafeCall(UnitXP, "player"))
+  ns.lastXPMax = ns.Clean(ns.SafeCall(UnitXPMax, "player"))
+end
+
+function ns.UpdateXP()
+  local s = ns.session
+  if not s or s.state ~= "active" then return end
+  local xp = ns.Clean(ns.SafeCall(UnitXP, "player"))
+  local max = ns.Clean(ns.SafeCall(UnitXPMax, "player"))
+  if type(xp) ~= "number" then return end
+  if type(ns.lastXP) == "number" then
+    local delta
+    if xp >= ns.lastXP then
+      delta = xp - ns.lastXP
+    else
+      delta = ((ns.lastXPMax or 0) - ns.lastXP) + xp   -- levelled up in between
+    end
+    if delta > 0 then s.counters.xpGained = (s.counters.xpGained or 0) + delta end
+  end
+  ns.lastXP, ns.lastXPMax = xp, max
+end
+
+-- Quest objectives: "8/8 Timberling slain" finishing is a memory; each kill on the way is not.
+function ns.ScanObjectives()
+  local s = ns.session
+  if not s or s.state ~= "active" then return end
+  if not (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo and C_QuestLog.GetQuestObjectives) then return end
+  local n = ns.SafeCall(C_QuestLog.GetNumQuestLogEntries) or 0
+  for i = 1, n do
+    local info = ns.SafeCall(C_QuestLog.GetInfo, i)
+    if type(info) == "table" and not info.isHeader and type(info.questID) == "number" then
+      local title = ns.CleanString(info.title)
+      if title then ns.questTitles[info.questID] = title end
+      local objectives = ns.SafeCall(C_QuestLog.GetQuestObjectives, info.questID)
+      if type(objectives) == "table" then
+        for idx, obj in ipairs(objectives) do
+          if type(obj) == "table" and obj.finished then
+            local key = info.questID .. "#" .. idx
+            if not ns.doneObjectives[key] then
+              ns.doneObjectives[key] = true
+              if ns.objectivesSeeded then
+                ns.AddEvent("OBJECTIVE_COMPLETE", { questID = info.questID, title = title, text = ns.CleanString(obj.text) })
+                s.counters.objectivesCompleted = (s.counters.objectivesCompleted or 0) + 1
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  ns.objectivesSeeded = true
 end
 
 -- Manual moments -------------------------------------------------------------

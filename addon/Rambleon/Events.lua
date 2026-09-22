@@ -65,6 +65,17 @@ handlers.PLAYER_LOGIN = function()
   ns.OnPlayerLogin()
 end
 
+local objectiveToken = 0
+local function scheduleObjectiveScan()
+  objectiveToken = objectiveToken + 1
+  local token = objectiveToken
+  if C_Timer and C_Timer.After then
+    C_Timer.After(1, function() if token == objectiveToken then ns.ScanObjectives() end end)
+  else
+    ns.ScanObjectives()
+  end
+end
+
 handlers.PLAYER_ENTERING_WORLD = function(isLogin, isReload)
   if not ns.loaded then return end
   if not ns.enteredWorld then
@@ -72,10 +83,28 @@ handlers.PLAYER_ENTERING_WORLD = function(isLogin, isReload)
     ns.StartSession()
     ns.StartHeartbeat()
   end
+  ns.SeedXP()
   ns.inInstance = nil
   checkInstance()
   scheduleZoneCheck()
   ns.UpdateRoster()
+  scheduleObjectiveScan()
+end
+
+handlers.CHAT_MSG_COMBAT_XP_GAIN = function(text)
+  ns.RecordKillFromChat(text)
+end
+
+handlers.PLAYER_XP_UPDATE = function(unit)
+  if unit == nil or unit == "player" then ns.UpdateXP() end
+end
+
+handlers.UNIT_QUEST_LOG_CHANGED = function(unit)
+  if unit == nil or unit == "player" then scheduleObjectiveScan() end
+end
+
+handlers.QUEST_LOG_UPDATE = function()
+  scheduleObjectiveScan()
 end
 
 handlers.PLAYER_LOGOUT = function()
@@ -92,6 +121,7 @@ handlers.PLAYER_LEVEL_UP = function(level)
   level = ns.Clean(level) or ns.Clean(ns.SafeCall(UnitLevel, "player"))
   ns.AddEvent("LEVEL_UP", { level = level })
   if level then s.character.endLevel = level end
+  ns.UpdateXP()
 end
 
 handlers.QUEST_ACCEPTED = function(a, b)

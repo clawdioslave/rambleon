@@ -79,6 +79,9 @@ def normalize_session(raw: Any, addon_version: Any = None, db_schema: Any = None
     s["zones"] = [z for z in _as_list(raw.get("zones")) if isinstance(z, dict)]
     s["people"] = [p for p in _as_list(raw.get("people")) if isinstance(p, dict)]
     s["failedEvents"] = [e for e in _as_list(raw.get("failedEvents")) if isinstance(e, str)]
+    kills = raw.get("kills") if isinstance(raw.get("kills"), dict) else {}
+    s["kills"] = {str(name): {k: _int(v) for k, v in info.items() if _int(v) is not None}
+                  for name, info in kills.items() if isinstance(info, dict)}
 
     # Effective state: a suspended session nobody resumed is over.
     now = now if now is not None else time.time()

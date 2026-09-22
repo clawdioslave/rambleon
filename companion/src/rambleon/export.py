@@ -66,6 +66,10 @@ def describe(ev: dict[str, Any]) -> str:
         return "Took a screenshot"
     if t == "NOTE":
         return f"Note: \"{ev.get('text')}\""
+    if t == "FIRST_KILL":
+        return f"First {ev.get('name')} slain"
+    if t == "OBJECTIVE_COMPLETE":
+        return f"{ev.get('text') or 'Objective complete'}" + (f" — \"{ev['title']}\"" if ev.get("title") else "")
     if t == "MARK":
         return "Marked moment" + (f" in {place(ev)}" if place(ev) else "")
     return str(t)
@@ -104,6 +108,8 @@ def render_markdown(session: dict[str, Any]) -> str:
         f"Levels gained: {levels_text}  ",
         f"Quests accepted: {cnt.get('questsAccepted', 0)}  ",
         f"Quests completed: {cnt.get('questsCompleted', 0)}  ",
+        f"Enemies slain: {cnt.get('kills', 0)}  ",
+        f"Experience gained: {cnt.get('xpGained', 0):,}  ",
         f"Deaths: {cnt.get('deaths', 0)}  ",
         f"Places visited: {len(session.get('zones', []))}  ",
         f"People adventured with: {len(session.get('people', []))}  ",
@@ -116,6 +122,11 @@ def render_markdown(session: dict[str, Any]) -> str:
             mins = int(round((p.get("seconds") or 0) / 60))
             cls = f" ({p['class']})" if p.get("class") else ""
             lines.append(f"* {p.get('name')}{cls} — {mins} minute{'s' if mins != 1 else ''}")
+    kills = sorted(session.get("kills", {}).items(), key=lambda kv: -(kv[1].get("count") or 0))
+    if kills:
+        lines += ["", "## Enemies Slain", ""]
+        for name, info in kills:
+            lines.append(f"* {name} × {info.get('count', 0)}")
     zones = session.get("zones", [])
     if zones:
         lines += ["", "## Places", ""]

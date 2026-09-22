@@ -41,9 +41,11 @@ def test_simulated_session_fixture():
 
 
 def test_torn_file_detected():
-    data = (FIXTURES / "Rambleon_simulated.lua").read_bytes()[:2500]
-    with pytest.raises(TornFile):
-        parse(data)
+    data = (FIXTURES / "Rambleon_simulated.lua").read_bytes()
+    # Cut at many offsets: every truncation must be reported as torn, never as a syntax error.
+    for cut in range(200, len(data) - 1, 97):
+        with pytest.raises(TornFile):
+            parse(data[:cut])
 
 
 def test_edge_cases():

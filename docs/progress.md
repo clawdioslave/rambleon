@@ -25,6 +25,18 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - `ramble doctor` on this Mac: WoW Forever FOUND, AddOn INSTALLED (symlink, TOC 16001), Archive READY, Claude CLI FOUND.
 - Docs: `environment.md`, `addon-api.md`, `data-model.md`, `CLAUDE.md`, `README.md`.
 
+### Confirmed in game (2026-09-21, first session)
+- Rambleon loads on Forever with Interface 16001; `/ramble` opens the panel; no event registration failed.
+- `UnitName("player")` and `UnitFullName("player")` both return `"Rambleon Birdsong"`; realm `"Classic Beta PvE"`,
+  normalized `"ClassicBetaPvE"`; `WOW_PROJECT_ID` 1; build 69913; GUID `Player-4618-…`; Dolanaar has mapID 1438.
+- WoW wrote `Rambleon.lua` on `/reload`; `ramble watch` captured it within seconds and archived the session.
+- **SavedVariables were restored across `/reload`** for this player (the session resumed: "Picked the story back up").
+  Cold start behaviour still unknown.
+- Bindings.xml must not use the `header` attribute on this client (fixed).
+- Group members and the zone were logged twice after a resume (fixed: the resume seeds roster and zone silently).
+- Kills were invisible. Added kill tracking from the "X dies, you gain N experience." chat line, XP accounting,
+  and quest objective completion events. The combat log stays untouched.
+
 ### Known issue found tonight
 - The standalone `claude` CLI on this Mac reports "OAuth access token has been revoked", so `ramble summarize` skipped
   the AI chapter and only wrote the prompt (correct degraded behaviour). Fix on the Mac: run `claude` in a terminal

@@ -88,6 +88,8 @@ def test_markdown_export_is_factual():
     assert 'Accepted "The Emerald Dreamcatcher"' in md
     assert "Moonhoof" in md
     assert "this cave is extremely cursed" in md
+    assert "## Enemies Slain" in md and "Timberling × 2" in md
+    assert "First Grell slain" in md and "8/8 Timberling slain" in md
 
 
 def test_prompt_and_split():

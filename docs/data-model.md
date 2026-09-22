@@ -25,9 +25,11 @@ RambleonDB = {
       character = { name, fullName, realmFromFullName, realm, normalizedRealm, race, raceFile, class, classFile,
                     faction, guid, startLevel, endLevel },
       client = { version, build, buildDate, tocVersion, projectId, flavorHint, flavor, addonVersion, locale },
-      counters = { levelsGained, questsAccepted, questsCompleted, deaths, zonesVisited, notes, marks, screenshots, achievements },
+      counters = { levelsGained, questsAccepted, questsCompleted, deaths, zonesVisited, notes, marks, screenshots, achievements,
+                   kills, xpGained, objectivesCompleted },
       zones = { { zone, subzone, mapID, firstSeen, lastSeen, visits }, ... },
       people = { { name, class, classFile, firstSeen, lastSeen, seconds, joins }, ... },
+      kills = { ["Timberling"] = { count = 12, xp = 540, firstAt = ..., lastAt = ... }, ... },
       events = { { t = 1790000123, type = "ZONE_ENTER", zone = "Teldrassil", subzone = "Dolanaar", mapID = 57, x = 55.3, y = 58.1, level = 11 }, ... },
       failedEvents = { "ACHIEVEMENT_EARNED" },   -- registrations the client refused
     },
@@ -49,6 +51,8 @@ RambleonDB = {
 | `ACHIEVEMENT {id, name}` | |
 | `SCREENSHOT` | timestamp only; the companion finds the file |
 | `NOTE {text}`, `MARK` | |
+| `FIRST_KILL {name, xp}` | first time an enemy of that name gave XP this session (from the "X dies, you gain N experience." chat line; no combat log) |
+| `OBJECTIVE_COMPLETE {questID, title, text}` | a quest objective finished, e.g. "8/8 Timberling slain" |
 
 Every event also carries `level`, and `zone`/`subzone` unless it is a zone event itself.
 

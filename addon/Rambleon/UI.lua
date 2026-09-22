@@ -84,7 +84,8 @@ local function build()
   panel.stats = {}
   local rows = {
     { "time", "Time" }, { "area", "Current Area" }, { "level", "Level" },
-    { "quests", "Quests Completed" }, { "places", "Places Visited" }, { "deaths", "Deaths" }, { "people", "People Met" },
+    { "quests", "Quests Completed" }, { "places", "Places Visited" }, { "kills", "Enemies Slain" },
+    { "deaths", "Deaths" }, { "people", "People Met" },
   }
   for _, row in ipairs(rows) do
     local k = label(panel, row[2], 12, INK_SOFT)
@@ -158,6 +159,7 @@ function UI.Refresh()
     panel.stats.level:SetText(tostring(st.level))
     panel.stats.quests:SetText(tostring(st.questsCompleted))
     panel.stats.places:SetText(tostring(st.places))
+    panel.stats.kills:SetText(tostring(st.kills))
     panel.stats.deaths:SetText(tostring(st.deaths))
     panel.stats.people:SetText(tostring(st.people))
   end
