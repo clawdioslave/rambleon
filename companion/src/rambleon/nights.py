@@ -2,11 +2,12 @@
 Sessions stay as they were archived; nights are derived on demand."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
 from .archive import Archive, load_json
-from .model import COUNTER_KEYS
+from .model import COUNTER_KEYS, SUSPEND_TIMEOUT
 
 CUTOFF_HOUR = 5  # play that runs past midnight still belongs to the evening it started
 
@@ -33,7 +34,15 @@ def _merge_keyed(existing: list[dict[str, Any]], incoming: list[dict[str, Any]],
             index[k] = copy
 
 
-def build_night(sessions: list[dict[str, Any]]) -> dict[str, Any]:
+def session_over(s: dict[str, Any], now: float | None = None) -> bool:
+    """Judged now, not when the snapshot was normalized: ended, or not seen for longer than the resume window."""
+    if s.get("state") == "ended":
+        return True
+    now = time.time() if now is None else now
+    return (now - (s.get("lastSeen") or s.get("startedAt") or 0)) > SUSPEND_TIMEOUT
+
+
+def build_night(sessions: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
     sessions = sorted(sessions, key=lambda s: s.get("startedAt") or 0)
     first, last = sessions[0], sessions[-1]
     date = night_date(first.get("startedAt"))
@@ -43,7 +52,7 @@ def build_night(sessions: list[dict[str, Any]]) -> dict[str, Any]:
         "id": f"night-{date}-{first['character'].get('slug', 'unknown')}",
         "nightDate": date,
         "sessionIds": [s["id"] for s in sessions],
-        "state": "ended" if all(s.get("state") == "ended" for s in sessions) else "open",
+        "state": "ended" if all(session_over(s, now) for s in sessions) else "open",
         "startedAt": first.get("startedAt"),
         "endedAt": max((s.get("endedAt") or s.get("lastSeen") or 0) for s in sessions) or None,
         "playedSeconds": sum(s.get("playedSeconds") or 0 for s in sessions),

@@ -35,6 +35,13 @@ def test_night_stitches_sessions(tmp_path):
     assert "Picked the story back up" not in md
 
 
+def test_night_state_judged_at_read_time():
+    a, b = two_sessions()
+    b = dict(b, state="suspended")
+    assert build_night([a, b], now=b["lastSeen"] + 10)["state"] == "open"
+    assert build_night([a, b], now=b["lastSeen"] + 3600)["state"] == "ended"
+
+
 def test_night_cutoff():
     import datetime
     late = int(datetime.datetime(2026, 9, 22, 1, 30).timestamp())
