@@ -107,6 +107,34 @@ def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_scre
     return outcomes
 
 
+def reprocess(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False) -> list[str]:
+    """Rebuild normalized sessions from every archived raw snapshot, oldest first (after companion upgrades)."""
+    outcomes: list[str] = []
+    snapshots = sorted(p for p in archive.raw_dir.glob("*.lua") if p.is_file())
+    for raw_path in snapshots:
+        data = _read(raw_path)
+        if data is None:
+            continue
+        try:
+            parsed = parse(data)
+        except LuaParseError as e:
+            log(f"skipping {raw_path.name}: {e}")
+            continue
+        db = parsed.get("RambleonDB")
+        sessions = sessions_from_db(to_python(db)) if db is not None else []
+        capture = {"capturedAt": int(raw_path.stat().st_mtime), "rawSnapshot": str(raw_path.relative_to(archive.root)),
+                   "sourceHash": blake(data), "sourceFile": "reprocessed", "reprocessedAt": int(time.time())}
+        for s in sessions:
+            attach_screenshots(s, paths.screenshots_dir, archive.screenshots_dir if copy_screenshots else None)
+            outcome, out_path = archive.upsert_session(s, capture)
+            if outcome in ("new", "updated"):
+                log(f"{outcome} {s['id']} from {raw_path.name}")
+            outcomes.append(f"{outcome} {s['id']}")
+    archive.rebuild_index()
+    log(f"reprocessed {len(snapshots)} snapshot(s)")
+    return outcomes
+
+
 def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False) -> list[str]:
     files = paths.saved_variables_files()
     if not files:

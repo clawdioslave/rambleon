@@ -17,7 +17,7 @@ from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
 from .summarize import DEFAULT_MODEL, summarize as run_summarize
-from .watch import ingest_once, watch as run_watch
+from .watch import ingest_once, reprocess as run_reprocess, watch as run_watch
 
 app = typer.Typer(help="Rambleon — your Azeroth adventure journal, Mac side.", no_args_is_help=True, add_completion=False)
 console = Console()
@@ -97,6 +97,13 @@ def ingest(copy_screenshots: bool = typer.Option(False, "--copy-screenshots")) -
         console.print(f"{len(outcomes)} outcome(s): " + ", ".join(outcomes))
     else:
         console.print("nothing new.")
+
+
+@app.command()
+def reprocess(copy_screenshots: bool = typer.Option(False, "--copy-screenshots")) -> None:
+    """Rebuild normalized sessions from the archived raw snapshots (use after upgrading the companion)."""
+    archive, paths = _archive()
+    run_reprocess(paths, archive, log, copy_screenshots)
 
 
 @app.command()
