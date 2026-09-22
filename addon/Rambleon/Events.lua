@@ -1,0 +1,169 @@
+-- Rambleon: game event wiring. Passive only. Registrations are pcall-guarded because
+-- the Forever client throws on unknown events.
+local ADDON, ns = ...
+
+local frame = CreateFrame("Frame", "RambleonEventFrame")
+ns.eventFrame = frame
+local handlers = {}
+
+local ZONE_DEBOUNCE = 1.5
+local zoneToken = 0
+
+local function scheduleZoneCheck()
+  zoneToken = zoneToken + 1
+  local token = zoneToken
+  if C_Timer and C_Timer.After then
+    C_Timer.After(ZONE_DEBOUNCE, function()
+      if token == zoneToken then ns.NoteZoneChange(false) end
+    end)
+  else
+    ns.NoteZoneChange(false)
+  end
+end
+
+local function checkInstance()
+  local inInstance, instanceType = ns.SafeCall(IsInInstance)
+  inInstance = inInstance and true or false
+  if ns.inInstance == nil then
+    ns.inInstance = inInstance
+    if inInstance then
+      local name = ns.SafeCall(GetInstanceInfo)
+      ns.AddEvent("INSTANCE_ENTER", { name = ns.CleanString(name), instanceType = ns.CleanString(instanceType) })
+    end
+    return
+  end
+  if inInstance ~= ns.inInstance then
+    ns.inInstance = inInstance
+    if inInstance then
+      local name = ns.SafeCall(GetInstanceInfo)
+      ns.AddEvent("INSTANCE_ENTER", { name = ns.CleanString(name), instanceType = ns.CleanString(instanceType) })
+    else
+      ns.AddEvent("INSTANCE_EXIT", {})
+    end
+  end
+end
+
+local function questTitle(questID)
+  if not questID then return nil end
+  local title = ns.questTitles[questID]
+  if title then return title end
+  if C_QuestLog and C_QuestLog.GetTitleForQuestID then
+    title = ns.CleanString(ns.SafeCall(C_QuestLog.GetTitleForQuestID, questID))
+  end
+  if not title and C_QuestLog and C_QuestLog.GetQuestInfo then
+    title = ns.CleanString(ns.SafeCall(C_QuestLog.GetQuestInfo, questID))
+  end
+  if title then ns.questTitles[questID] = title end
+  return title
+end
+
+handlers.ADDON_LOADED = function(name)
+  ns.OnAddonLoaded(name)
+end
+
+handlers.PLAYER_LOGIN = function()
+  ns.OnPlayerLogin()
+end
+
+handlers.PLAYER_ENTERING_WORLD = function(isLogin, isReload)
+  if not ns.loaded then return end
+  if not ns.enteredWorld then
+    ns.enteredWorld = true
+    ns.StartSession()
+    ns.StartHeartbeat()
+  end
+  ns.inInstance = nil
+  checkInstance()
+  scheduleZoneCheck()
+  ns.UpdateRoster()
+end
+
+handlers.PLAYER_LOGOUT = function()
+  ns.SuspendSession()
+end
+
+handlers.ZONE_CHANGED_NEW_AREA = scheduleZoneCheck
+handlers.ZONE_CHANGED = scheduleZoneCheck
+handlers.ZONE_CHANGED_INDOORS = scheduleZoneCheck
+
+handlers.PLAYER_LEVEL_UP = function(level)
+  local s = ns.EnsureSession()
+  if not s then return end
+  level = ns.Clean(level) or ns.Clean(ns.SafeCall(UnitLevel, "player"))
+  ns.AddEvent("LEVEL_UP", { level = level })
+  if level then s.character.endLevel = level end
+end
+
+handlers.QUEST_ACCEPTED = function(a, b)
+  if not ns.EnsureSession() then return end
+  local questID = ns.Clean(b) or ns.Clean(a)   -- retail: (questID); classic: (questLogIndex, questID)
+  if type(questID) ~= "number" then return end
+  local ev = ns.AddEvent("QUEST_ACCEPTED", { questID = questID, title = questTitle(questID) })
+  if ev and not ev.title and C_Timer and C_Timer.After then
+    C_Timer.After(1, function()
+      local title = questTitle(questID)
+      if title then ev.title = title; ns.dirty = true end
+    end)
+  end
+end
+
+handlers.QUEST_TURNED_IN = function(questID, xp, money)
+  if not ns.EnsureSession() then return end
+  questID = ns.Clean(questID)
+  if type(questID) ~= "number" then return end
+  ns.AddEvent("QUEST_COMPLETED", { questID = questID, title = questTitle(questID),
+                                   xp = ns.Clean(xp), money = ns.Clean(money) })
+end
+
+handlers.PLAYER_DEAD = function()
+  if not ns.EnsureSession() then return end
+  ns.isDead = true
+  ns.AddEvent("DEATH", {})
+end
+
+local function maybeRevived()
+  if not ns.isDead then return end
+  local deadOrGhost = ns.SafeCall(UnitIsDeadOrGhost, "player")
+  if not deadOrGhost then
+    ns.isDead = false
+    ns.AddEvent("REVIVED", {})
+  end
+end
+handlers.PLAYER_UNGHOST = maybeRevived
+handlers.PLAYER_ALIVE = maybeRevived
+
+handlers.GROUP_ROSTER_UPDATE = function()
+  ns.UpdateRoster()
+end
+
+handlers.UPDATE_INSTANCE_INFO = function()
+  if ns.enteredWorld then checkInstance() end
+end
+
+handlers.ACHIEVEMENT_EARNED = function(achievementID)
+  if not ns.EnsureSession() then return end
+  local id = ns.Clean(achievementID)
+  local name
+  if GetAchievementInfo then
+    local _, n = ns.SafeCall(GetAchievementInfo, id)
+    name = ns.CleanString(n)
+  end
+  ns.AddEvent("ACHIEVEMENT", { id = id, name = name })
+end
+
+handlers.SCREENSHOT_SUCCEEDED = function()
+  if not ns.EnsureSession() then return end
+  ns.AddEvent("SCREENSHOT", {})
+end
+
+frame:SetScript("OnEvent", function(self, event, ...)
+  local h = handlers[event]
+  if h then
+    local ok, err = pcall(h, ...)
+    if not ok then ns.Warn(event .. ": " .. tostring(err)) end
+  end
+end)
+
+for event in pairs(handlers) do
+  ns.SafeRegister(frame, event)
+end

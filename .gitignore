@@ -1,0 +1,27 @@
+# Personal adventure history stays local unless intentionally committed
+archive/*
+!archive/.gitkeep
+exports/*
+!exports/.gitkeep
+
+# Local overrides (WoW paths etc.)
+rambleon.local.toml
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# WoW artefacts that should never land here
+*.lua.bak
+WoWScrnShot_*
+WTF/

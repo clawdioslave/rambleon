@@ -1,0 +1,402 @@
+-- Rambleon: the in-memory session and the RambleonDB SavedVariables shape.
+-- Rule: every value stored under RambleonDB must be a string, number, boolean or table of those.
+-- Rule: never trust that RambleonDB was restored (Forever beta bug). Every login may be a fresh table.
+local ADDON, ns = ...
+
+local RESUME_WINDOW = 600      -- seconds: resume a suspended session if it was seen this recently
+local KEEP_SESSIONS = 10       -- non-active sessions kept in the SV table (the Mac archive owns history)
+local HEARTBEAT = 30           -- seconds
+
+ns.session = nil
+ns.questTitles = {}
+ns.currentGroup = {}           -- name -> { since = GetTime() }
+ns.lastZoneKey = nil
+ns.inInstance = nil
+ns.isDead = false
+ns.dbRestored = false
+ns.dirty = false               -- UI refresh hint
+
+function ns.InitDB()
+  if type(RambleonDB) == "table" then
+    ns.dbRestored = type(RambleonDB.sessions) == "table" and #RambleonDB.sessions > 0
+  else
+    RambleonDB = {}
+  end
+  RambleonDB.schemaVersion = ns.SCHEMA_VERSION
+  RambleonDB.addonVersion = ns.VERSION
+  if type(RambleonDB.sessions) ~= "table" then RambleonDB.sessions = {} end
+end
+
+-- Location ------------------------------------------------------------------
+
+function ns.GetLocation()
+  local loc = {}
+  loc.zone = ns.CleanString(ns.SafeCall(GetRealZoneText)) or ns.CleanString(ns.SafeCall(GetZoneText))
+  loc.subzone = ns.CleanString(ns.SafeCall(GetSubZoneText))
+  if loc.subzone == loc.zone then loc.subzone = nil end
+  if C_Map and C_Map.GetBestMapForUnit then
+    loc.mapID = ns.Clean(ns.SafeCall(C_Map.GetBestMapForUnit, "player"))
+  end
+  local inInstance = ns.SafeCall(IsInInstance)
+  if loc.mapID and not inInstance and C_Map.GetPlayerMapPosition then
+    local pos = ns.SafeCall(C_Map.GetPlayerMapPosition, loc.mapID, "player")
+    if pos and pos.GetXY then
+      local x, y = ns.SafeCall(pos.GetXY, pos)
+      x, y = ns.Clean(x), ns.Clean(y)
+      if x and y then
+        loc.x = math.floor(x * 1000 + 0.5) / 10   -- percent with one decimal
+        loc.y = math.floor(y * 1000 + 0.5) / 10
+      end
+    end
+  end
+  return loc
+end
+
+-- Identity ------------------------------------------------------------------
+
+function ns.CaptureCharacter()
+  local c = {}
+  c.name = ns.CleanString(ns.SafeCall(UnitName, "player"))
+  if UnitFullName then
+    local n, r = ns.SafeCall(UnitFullName, "player")
+    c.fullName = ns.CleanString(n)
+    c.realmFromFullName = ns.CleanString(r)
+  end
+  c.realm = ns.CleanString(ns.SafeCall(GetRealmName))
+  c.normalizedRealm = ns.CleanString(ns.SafeCall(GetNormalizedRealmName))
+  local race, raceFile = ns.SafeCall(UnitRace, "player")
+  c.race, c.raceFile = ns.CleanString(race), ns.CleanString(raceFile)
+  local class, classFile = ns.SafeCall(UnitClass, "player")
+  c.class, c.classFile = ns.CleanString(class), ns.CleanString(classFile)
+  c.faction = ns.CleanString(ns.SafeCall(UnitFactionGroup, "player"))
+  c.guid = ns.CleanString(ns.SafeCall(UnitGUID, "player"))
+  c.startLevel = ns.Clean(ns.SafeCall(UnitLevel, "player"))
+  c.endLevel = c.startLevel
+  return c
+end
+
+function ns.CaptureClient()
+  local cl = {}
+  local v, b, d, toc = ns.SafeCall(GetBuildInfo)
+  cl.version, cl.build, cl.buildDate, cl.tocVersion = ns.Clean(v), ns.Clean(b), ns.Clean(d), ns.Clean(toc)
+  cl.projectId = ns.Clean(WOW_PROJECT_ID)
+  cl.flavorHint = ns.flavorHint
+  cl.addonVersion = ns.VERSION
+  cl.locale = ns.Clean(ns.SafeCall(GetLocale))
+  if ns.flavorHint == "forever" then
+    cl.flavor = "forever"
+  elseif cl.tocVersion == 16001 then
+    cl.flavor = "forever?"
+  else
+    cl.flavor = "unknown"
+  end
+  return cl
+end
+
+function ns.DisplayName()
+  local c = ns.session and ns.session.character
+  return (c and (c.fullName or c.name)) or ns.CleanString(ns.SafeCall(UnitName, "player")) or "Adventurer"
+end
+
+-- Session lifecycle ----------------------------------------------------------
+
+local function newSessionId(character)
+  local stamp = date("!%Y-%m-%dT%H%M%SZ")
+  local base = stamp .. "_" .. ns.Slug(character.fullName or character.name or "unknown")
+  local id, n = base, 1
+  local taken = true
+  while taken do
+    taken = false
+    for _, s in ipairs(RambleonDB.sessions) do
+      if type(s) == "table" and s.id == id then taken = true break end
+    end
+    if taken then n = n + 1; id = base .. "-" .. n end
+  end
+  return id
+end
+
+local function findResumable(character)
+  local now = ns.Now()
+  for i = #RambleonDB.sessions, 1, -1 do
+    local s = RambleonDB.sessions[i]
+    if type(s) == "table" and s.state == "suspended" and s.character
+       and s.character.name == character.name
+       and type(s.lastSeen) == "number" and (now - s.lastSeen) <= RESUME_WINDOW then
+      return s
+    end
+  end
+  return nil
+end
+
+function ns.PruneSessions()
+  local sessions = RambleonDB.sessions
+  local nonActive = 0
+  for _, s in ipairs(sessions) do
+    if s.state ~= "active" then nonActive = nonActive + 1 end
+  end
+  local i = 1
+  while nonActive > KEEP_SESSIONS and i <= #sessions do
+    if sessions[i].state ~= "active" then
+      table.remove(sessions, i)
+      nonActive = nonActive - 1
+    else
+      i = i + 1
+    end
+  end
+end
+
+function ns.StartSession()
+  local character = ns.CaptureCharacter()
+  local resumed = findResumable(character)
+  ns.playedAnchor = GetTime()
+  ns.currentGroup = {}
+  if resumed then
+    ns.session = resumed
+    resumed.state = "active"
+    resumed.resumes = (resumed.resumes or 0) + 1
+    ns.AddEvent("RESUMED", {})
+    ns.Debug("resumed session " .. resumed.id)
+    return resumed
+  end
+  local s = {
+    id = newSessionId(character),
+    schemaVersion = ns.SCHEMA_VERSION,
+    state = "active",
+    startedAt = ns.Now(),
+    startedServerTime = ns.Clean(ns.SafeCall(GetServerTime)),
+    lastSeen = ns.Now(),
+    playedSeconds = 0,
+    character = character,
+    client = ns.CaptureClient(),
+    counters = { levelsGained = 0, questsAccepted = 0, questsCompleted = 0, deaths = 0,
+                 zonesVisited = 0, notes = 0, marks = 0, screenshots = 0, achievements = 0 },
+    zones = {},
+    people = {},
+    events = {},
+    failedEvents = {},
+  }
+  for _, e in ipairs(ns.failedEvents) do table.insert(s.failedEvents, e) end
+  table.insert(RambleonDB.sessions, s)
+  ns.session = s
+  ns.PruneSessions()
+  ns.lastZoneKey = nil
+  ns.AddEvent("SESSION_START", {})
+  ns.Debug("new session " .. s.id)
+  return s
+end
+
+-- Any recorder call goes through this: after END CHAPTER (without a reload) a new chapter starts.
+function ns.EnsureSession()
+  if not ns.session or ns.session.state ~= "active" then
+    if not ns.loaded then return nil end
+    ns.StartSession()
+  end
+  return ns.session
+end
+
+function ns.PlayedSeconds()
+  local s = ns.session
+  if not s then return 0 end
+  local base = s.playedSeconds or 0
+  if s.state == "active" and ns.playedAnchor then
+    base = base + (GetTime() - ns.playedAnchor)
+  end
+  return base
+end
+
+local function flushPlaytime()
+  local s = ns.session
+  if not s or s.state ~= "active" or not ns.playedAnchor then return end
+  local now = GetTime()
+  s.playedSeconds = math.floor(((s.playedSeconds or 0) + (now - ns.playedAnchor)) + 0.5)
+  ns.playedAnchor = now
+  s.lastSeen = ns.Now()
+end
+
+function ns.FlushPeople()
+  local s = ns.session
+  if not s then return end
+  local now = GetTime()
+  for name, g in pairs(ns.currentGroup) do
+    local p = ns.FindPerson(name)
+    if p then
+      p.seconds = math.floor((p.seconds or 0) + (now - g.since) + 0.5)
+      p.lastSeen = ns.Now()
+    end
+    g.since = now
+  end
+end
+
+function ns.Heartbeat()
+  if not ns.session or ns.session.state ~= "active" then return end
+  flushPlaytime()
+  ns.FlushPeople()
+  ns.dirty = true
+end
+
+function ns.EndSession(reason)
+  local s = ns.session
+  if not s or s.state ~= "active" then return nil end
+  flushPlaytime()
+  ns.FlushPeople()
+  s.character.endLevel = ns.Clean(ns.SafeCall(UnitLevel, "player")) or s.character.endLevel
+  ns.AddEvent("SESSION_END", { reason = reason or "end_chapter" })
+  s.state = "ended"
+  s.endedAt = ns.Now()
+  s.endReason = reason or "end_chapter"
+  ns.playedAnchor = nil
+  ns.dirty = true
+  return s
+end
+
+function ns.SuspendSession()
+  local s = ns.session
+  if not s or s.state ~= "active" then return end
+  flushPlaytime()
+  ns.FlushPeople()
+  s.character.endLevel = ns.Clean(ns.SafeCall(UnitLevel, "player")) or s.character.endLevel
+  s.state = "suspended"
+  s.lastSeen = ns.Now()
+  ns.playedAnchor = nil
+end
+
+-- Events ---------------------------------------------------------------------
+
+local COUNTER_FOR = {
+  LEVEL_UP = "levelsGained", QUEST_ACCEPTED = "questsAccepted", QUEST_COMPLETED = "questsCompleted",
+  DEATH = "deaths", NOTE = "notes", MARK = "marks", SCREENSHOT = "screenshots", ACHIEVEMENT = "achievements",
+}
+
+function ns.AddEvent(eventType, fields)
+  local s = ns.session
+  if not s then return nil end
+  local ev = { t = ns.Now(), type = eventType }
+  for k, v in pairs(fields or {}) do
+    local clean = ns.Clean(v)
+    if clean ~= nil then ev[k] = clean end
+  end
+  if ev.level == nil then ev.level = ns.Clean(ns.SafeCall(UnitLevel, "player")) end
+  if ev.zone == nil and eventType ~= "ZONE_ENTER" and eventType ~= "SESSION_START" then
+    local loc = ns.GetLocation()
+    ev.zone, ev.subzone = loc.zone, loc.subzone
+  end
+  table.insert(s.events, ev)
+  local counter = COUNTER_FOR[eventType]
+  if counter then s.counters[counter] = (s.counters[counter] or 0) + 1 end
+  s.lastSeen = ev.t
+  ns.dirty = true
+  ns.Debug(eventType)
+  return ev
+end
+
+-- Zones ----------------------------------------------------------------------
+
+function ns.RecordZone(loc)
+  local s = ns.session
+  if not s or not loc.zone then return end
+  local key = loc.zone .. "|" .. (loc.subzone or "")
+  for _, z in ipairs(s.zones) do
+    if (z.zone .. "|" .. (z.subzone or "")) == key then
+      z.visits = (z.visits or 1) + 1
+      z.lastSeen = ns.Now()
+      return z
+    end
+  end
+  local z = { zone = loc.zone, subzone = loc.subzone, mapID = loc.mapID,
+              firstSeen = ns.Now(), lastSeen = ns.Now(), visits = 1 }
+  table.insert(s.zones, z)
+  s.counters.zonesVisited = #s.zones
+  return z
+end
+
+function ns.NoteZoneChange(force)
+  if not ns.EnsureSession() then return end
+  local loc = ns.GetLocation()
+  if not loc.zone then return end
+  local key = loc.zone .. "|" .. (loc.subzone or "")
+  if key == ns.lastZoneKey and not force then return end
+  ns.lastZoneKey = key
+  ns.RecordZone(loc)
+  ns.AddEvent("ZONE_ENTER", { zone = loc.zone, subzone = loc.subzone, mapID = loc.mapID, x = loc.x, y = loc.y })
+end
+
+-- People ---------------------------------------------------------------------
+
+function ns.FindPerson(name)
+  local s = ns.session
+  if not s then return nil end
+  for _, p in ipairs(s.people) do
+    if p.name == name then return p end
+  end
+  return nil
+end
+
+function ns.UpdateRoster()
+  local s = ns.EnsureSession()
+  if not s then return end
+  local present = {}
+  local inGroup = ns.SafeCall(IsInGroup)
+  if inGroup then
+    local n = ns.SafeCall(GetNumGroupMembers) or 0
+    local inRaid = ns.SafeCall(IsInRaid)
+    for i = 1, n do
+      local unit = (inRaid and "raid" or "party") .. i
+      if ns.SafeCall(UnitExists, unit) and not ns.SafeCall(UnitIsUnit, unit, "player") then
+        local name = ns.CleanString(ns.SafeCall(UnitName, unit))
+        if name and name ~= UNKNOWNOBJECT then
+          local class, classFile = ns.SafeCall(UnitClass, unit)
+          present[name] = { class = ns.CleanString(class), classFile = ns.CleanString(classFile) }
+        end
+      end
+    end
+  end
+  local now = GetTime()
+  for name, info in pairs(present) do
+    if not ns.currentGroup[name] then
+      ns.currentGroup[name] = { since = now }
+      local p = ns.FindPerson(name)
+      if not p then
+        p = { name = name, class = info.class, classFile = info.classFile,
+              firstSeen = ns.Now(), lastSeen = ns.Now(), seconds = 0, joins = 0 }
+        table.insert(s.people, p)
+      end
+      p.joins = (p.joins or 0) + 1
+      p.lastSeen = ns.Now()
+      ns.AddEvent("GROUP_JOIN", { name = name, class = info.class })
+    end
+  end
+  for name, g in pairs(ns.currentGroup) do
+    if not present[name] then
+      local p = ns.FindPerson(name)
+      if p then
+        p.seconds = math.floor((p.seconds or 0) + (now - g.since) + 0.5)
+        p.lastSeen = ns.Now()
+      end
+      ns.currentGroup[name] = nil
+      ns.AddEvent("GROUP_LEAVE", { name = name })
+    end
+  end
+end
+
+-- Manual moments -------------------------------------------------------------
+
+function ns.AddNote(text)
+  text = ns.Trim(text)
+  if text == "" then return nil end
+  if not ns.EnsureSession() then return nil end
+  if #text > 500 then text = text:sub(1, 500) end
+  return ns.AddEvent("NOTE", { text = text })
+end
+
+function ns.MarkMoment()
+  if not ns.EnsureSession() then return nil end
+  return ns.AddEvent("MARK", {})
+end
+
+-- Heartbeat ticker (started once the world is entered)
+function ns.StartHeartbeat()
+  if ns.heartbeatTicker then return end
+  if C_Timer and C_Timer.NewTicker then
+    ns.heartbeatTicker = C_Timer.NewTicker(HEARTBEAT, ns.Heartbeat)
+  end
+end

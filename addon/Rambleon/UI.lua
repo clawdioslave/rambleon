@@ -1,0 +1,267 @@
+-- Rambleon: the adventure log panel. Function first; parchment feel with built-in textures only.
+local ADDON, ns = ...
+ns.UI = {}
+local UI = ns.UI
+
+local WIDTH, HEIGHT = 380, 540
+local RECENT = 10
+local TITLE_FONT = "Fonts\\MORPHEUS.TTF"
+local BODY_FONT = "Fonts\\FRIZQT__.TTF"
+local INK = { 0.24, 0.16, 0.08 }         -- dark brown text
+local INK_SOFT = { 0.42, 0.30, 0.16 }
+local GOLD = { 0.62, 0.42, 0.12 }
+
+local panel
+
+local function setFont(fs, path, size, flags)
+  local ok = pcall(fs.SetFont, fs, path, size, flags or "")
+  if not ok then fs:SetFontObject(GameFontNormal) end
+end
+
+local function label(parent, text, size, color, font)
+  local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  setFont(fs, font or BODY_FONT, size or 12)
+  fs:SetTextColor(color[1], color[2], color[3])
+  fs:SetJustifyH("LEFT")
+  fs:SetText(text or "")
+  return fs
+end
+
+local function button(parent, text, width)
+  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  b:SetSize(width or 110, 24)
+  b:SetText(text)
+  return b
+end
+
+local function build()
+  local template = BackdropTemplateMixin and "BackdropTemplate" or nil
+  panel = CreateFrame("Frame", "RambleonPanel", UIParent, template)
+  panel:SetSize(WIDTH, HEIGHT)
+  panel:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
+  panel:SetFrameStrata("MEDIUM")
+  panel:SetMovable(true)
+  panel:EnableMouse(true)
+  panel:SetClampedToScreen(true)
+  panel:RegisterForDrag("LeftButton")
+  panel:SetScript("OnDragStart", panel.StartMoving)
+  panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
+  if panel.SetBackdrop then
+    panel:SetBackdrop({
+      bgFile = "Interface\\Buttons\\WHITE8X8",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = false, edgeSize = 32,
+      insets = { left = 10, right = 10, top = 10, bottom = 10 },
+    })
+    panel:SetBackdropColor(0.90, 0.82, 0.64, 0.97)     -- parchment
+    panel:SetBackdropBorderColor(0.75, 0.60, 0.35, 1)
+  end
+  -- Optional parchment atlas; harmless if the atlas does not exist on this client.
+  local parchment = panel:CreateTexture(nil, "BACKGROUND", nil, 1)
+  parchment:SetPoint("TOPLEFT", 12, -12)
+  parchment:SetPoint("BOTTOMRIGHT", -12, 12)
+  local ok = pcall(parchment.SetAtlas, parchment, "QuestBG-Parchment", true)
+  if ok then parchment:SetAlpha(0.35) else parchment:Hide() end
+
+  -- Escape closes
+  tinsert(UISpecialFrames, "RambleonPanel")
+
+  local close = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -4, -4)
+
+  panel.title = label(panel, "RAMBLEON", 22, GOLD, TITLE_FONT)
+  panel.title:SetPoint("TOP", 0, -22)
+  panel.title:SetJustifyH("CENTER")
+  panel.subtitle = label(panel, "ADVENTURE LOG", 11, INK_SOFT)
+  panel.subtitle:SetPoint("TOP", panel.title, "BOTTOM", 0, -2)
+  panel.subtitle:SetJustifyH("CENTER")
+
+  local y = -74
+  panel.sectionSession = label(panel, "Current Session", 14, GOLD, TITLE_FONT)
+  panel.sectionSession:SetPoint("TOPLEFT", 26, y)
+  y = y - 22
+
+  panel.stats = {}
+  local rows = {
+    { "time", "Time" }, { "area", "Current Area" }, { "level", "Level" },
+    { "quests", "Quests Completed" }, { "places", "Places Visited" }, { "deaths", "Deaths" }, { "people", "People Met" },
+  }
+  for _, row in ipairs(rows) do
+    local k = label(panel, row[2], 12, INK_SOFT)
+    k:SetPoint("TOPLEFT", 30, y)
+    local v = label(panel, "—", 12, INK)
+    v:SetPoint("TOPLEFT", 160, y)
+    v:SetWidth(WIDTH - 190)
+    v:SetWordWrap(false)
+    panel.stats[row[1]] = v
+    y = y - 17
+  end
+
+  y = y - 10
+  panel.sectionJourney = label(panel, "Recent Journey", 14, GOLD, TITLE_FONT)
+  panel.sectionJourney:SetPoint("TOPLEFT", 26, y)
+  y = y - 22
+
+  panel.lines = {}
+  for i = 1, RECENT do
+    local t = label(panel, "", 11, INK_SOFT)
+    t:SetPoint("TOPLEFT", 30, y)
+    t:SetWidth(58)
+    local d = label(panel, "", 11, INK)
+    d:SetPoint("TOPLEFT", 90, y)
+    d:SetWidth(WIDTH - 120)
+    d:SetWordWrap(false)
+    panel.lines[i] = { time = t, text = d }
+    y = y - 15
+  end
+
+  panel.banner = label(panel, "", 11, GOLD)
+  panel.banner:SetPoint("BOTTOM", 0, 48)
+  panel.banner:SetJustifyH("CENTER")
+  panel.banner:SetWidth(WIDTH - 60)
+
+  local mark = button(panel, "MARK MOMENT", 112)
+  mark:SetPoint("BOTTOMLEFT", 20, 18)
+  mark:SetScript("OnClick", function() if ns.MarkMoment() then UI.MomentRemembered() end end)
+  local note = button(panel, "ADD NOTE", 100)
+  note:SetPoint("LEFT", mark, "RIGHT", 6, 0)
+  note:SetScript("OnClick", UI.PromptNote)
+  local finish = button(panel, "END CHAPTER", 112)
+  finish:SetPoint("LEFT", note, "RIGHT", 6, 0)
+  finish:SetScript("OnClick", UI.PromptEndChapter)
+
+  local acc = 0
+  panel:SetScript("OnUpdate", function(self, elapsed)
+    acc = acc + elapsed
+    if acc >= 1 or ns.dirty then
+      acc = 0
+      UI.Refresh()
+    end
+  end)
+  panel:SetScript("OnShow", UI.Refresh)
+  panel:Hide()
+  return panel
+end
+
+function UI.Get()
+  return panel or build()
+end
+
+function UI.Refresh()
+  if not panel or not panel:IsShown() then return end
+  ns.dirty = false
+  panel.title:SetText(string.upper(ns.DisplayName()))
+  local st = ns.Journal.Stats()
+  if st then
+    panel.stats.time:SetText(ns.FormatDuration(st.played))
+    panel.stats.area:SetText(tostring(st.area))
+    panel.stats.level:SetText(tostring(st.level))
+    panel.stats.quests:SetText(tostring(st.questsCompleted))
+    panel.stats.places:SetText(tostring(st.places))
+    panel.stats.deaths:SetText(tostring(st.deaths))
+    panel.stats.people:SetText(tostring(st.people))
+  end
+  local recent = ns.Journal.RecentEvents(RECENT)
+  for i = 1, RECENT do
+    local ev = recent[i]
+    if ev then
+      panel.lines[i].time:SetText(ns.FormatClock(ev.t))
+      panel.lines[i].text:SetText(ns.Journal.DescribeEvent(ev))
+    else
+      panel.lines[i].time:SetText("")
+      panel.lines[i].text:SetText("")
+    end
+  end
+  if ns.session and ns.session.state == "ended" then
+    panel.banner:SetText("Chapter ended. Type /reload to save it to disk.")
+  elseif UI.bannerUntil and GetTime() < UI.bannerUntil then
+    -- keep transient banner
+  else
+    panel.banner:SetText("")
+  end
+end
+
+function UI.Toggle()
+  local p = UI.Get()
+  if p:IsShown() then p:Hide() else p:Show() end
+end
+
+function UI.Flash(text, seconds)
+  local p = UI.Get()
+  p.banner:SetText(text)
+  UI.bannerUntil = GetTime() + (seconds or 3)
+  ns.dirty = true
+end
+
+function UI.MomentRemembered()
+  ns.Print("Moment remembered.")
+  UI.Flash("Moment remembered.", 3)
+  if PlaySound and SOUNDKIT and SOUNDKIT.IG_QUEST_LOG_OPEN then
+    pcall(PlaySound, SOUNDKIT.IG_QUEST_LOG_OPEN)
+  end
+end
+
+-- Popups -----------------------------------------------------------------------
+
+StaticPopupDialogs["RAMBLEON_NOTE"] = {
+  text = "What just happened?",
+  button1 = "SAVE NOTE",
+  button2 = CANCEL or "Cancel",
+  hasEditBox = true,
+  editBoxWidth = 300,
+  maxLetters = 500,
+  OnAccept = function(self)
+    local text = self.editBox and self.editBox:GetText() or ""
+    if ns.AddNote(text) then ns.Print("Noted.") ; UI.Flash("Noted.", 3) end
+  end,
+  EditBoxOnEnterPressed = function(self)
+    local parent = self:GetParent()
+    local text = self:GetText()
+    if ns.AddNote(text) then ns.Print("Noted.") ; UI.Flash("Noted.", 3) end
+    parent:Hide()
+  end,
+  EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+  OnShow = function(self) if self.editBox then self.editBox:SetText(""); self.editBox:SetFocus() end end,
+  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+StaticPopupDialogs["RAMBLEON_END"] = {
+  text = "End this chapter and reload the UI to save it?\n\nRambleon needs WoW to write its SavedVariables. Reloading does that.",
+  button1 = "END & SAVE",
+  button2 = CANCEL or "Cancel",
+  OnAccept = function() UI.EndChapterAndReload() end,
+  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+function UI.PromptNote()
+  StaticPopup_Show("RAMBLEON_NOTE")
+end
+
+function UI.PromptEndChapter()
+  if not ns.session or ns.session.state ~= "active" then
+    ns.Print("No active chapter. Type /reload to save what is already recorded.")
+    return
+  end
+  StaticPopup_Show("RAMBLEON_END")
+end
+
+function UI.EndChapterAndReload()
+  local s = ns.EndSession("end_chapter")
+  if not s then return end
+  ns.Print(string.format("Chapter ended after %s. Saving...", ns.FormatDuration(s.playedSeconds or 0)))
+  ns.dirty = true
+  -- This runs from the popup button click (a hardware event). If Forever protects Reload entirely,
+  -- the pcall fails or nothing happens, and we fall back to asking for /reload.
+  local reloaded = false
+  local ok = pcall(function()
+    if C_UI and C_UI.Reload then C_UI.Reload() else ReloadUI() end
+    reloaded = true
+  end)
+  if C_Timer and C_Timer.After then
+    C_Timer.After(1, function()
+      ns.Print("The UI did not reload on its own. Type /reload to save this chapter.")
+      UI.Flash("Type /reload to save this chapter.", 30)
+    end)
+  end
+  if not ok then ns.Warn("reload blocked") end
+end

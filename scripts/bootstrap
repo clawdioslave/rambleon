@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# One-time setup on a Mac: uv, the companion environment, and the global `ramble` command.
+set -euo pipefail
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v uv >/dev/null 2>&1; then
+  if command -v brew >/dev/null 2>&1; then
+    echo "Installing uv with Homebrew..."
+    brew install uv
+  else
+    echo "Homebrew not found. Install uv from https://docs.astral.sh/uv/ and rerun." >&2
+    exit 1
+  fi
+fi
+
+cd "$REPO/companion"
+uv sync --group dev
+uv tool install --editable . --force
+uv tool update-shell >/dev/null 2>&1 || true
+echo
+echo "Done. If 'ramble' is not found in a new shell, add $(uv tool dir --bin 2>/dev/null || echo '~/.local/bin') to your PATH."
+echo "Next: ramble doctor"

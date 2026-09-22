@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: |cffd9a760RAMBLEON|r
+## Notes: Your Azeroth Adventure Journal. Quietly remembers where you went, what you did, and who you met.
+## Author: William Hussey
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+## SavedVariablesPerCharacter: RambleonDB
+## X-Website: https://github.com/phishmiami/rambleon
+## X-Category: Miscellaneous
+## X-Flavor: generic
+
+Util.lua
+Core.lua
+Session.lua
+Journal.lua
+Events.lua
+UI.lua
+Commands.lua
+Bindings.xml

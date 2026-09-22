@@ -1,0 +1,113 @@
+"""ramble doctor: is everything where Rambleon expects it?"""
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from .archive import Archive
+from .install import link_status
+from .paths import ADDON_NAME, Paths, read_build_version, read_flavor
+
+
+@dataclass
+class Check:
+    label: str
+    status: str      # FOUND / INSTALLED / READY / MISSING / ...
+    detail: str
+    ok: bool
+    essential: bool = True
+
+
+def _toc_interface(paths: Paths) -> str | None:
+    for name in (f"{ADDON_NAME}_Camelot.toc", f"{ADDON_NAME}.toc"):
+        toc = paths.addon_src / name
+        if toc.exists():
+            m = re.search(r"^## Interface:\s*(\d+)", toc.read_text(errors="replace"), re.M)
+            if m:
+                return m.group(1)
+    return None
+
+
+def _character_folders(paths: Paths) -> list[str]:
+    wtf = paths.wtf_dir
+    if not wtf or not wtf.is_dir():
+        return []
+    names = []
+    for char_dir in wtf.glob("Account/*/*/*/"):
+        if char_dir.name in ("SavedVariables",) or char_dir.parent.name == "SavedVariables":
+            continue
+        if (char_dir / "SavedVariables").is_dir() or any(char_dir.glob("*.txt")):
+            names.append(f"{char_dir.name} (realm folder {char_dir.parent.name})")
+    return sorted(set(names))
+
+
+def run_doctor(paths: Paths) -> list[Check]:
+    checks: list[Check] = []
+    wow = paths.wow_dir
+    if wow:
+        flavor = read_flavor(wow) or "unknown flavor"
+        version = read_build_version(wow) or "unknown version"
+        checks.append(Check("WoW Forever", "FOUND", f"{wow} ({flavor}, {version})", True))
+    else:
+        checks.append(Check("WoW Forever", "MISSING", "no WoW install found; set RAMBLEON_WOW_DIR", False))
+
+    state, detail = link_status(paths)
+    toc = _toc_interface(paths)
+    ok = state in ("linked", "copied")
+    label = {"linked": "INSTALLED (symlink)", "copied": "INSTALLED (copy)", "missing": "NOT INSTALLED",
+             "broken": "BROKEN LINK", "foreign": "SOMETHING ELSE", "no-wow": "NO WOW"}[state]
+    checks.append(Check("Rambleon AddOn", label, f"{detail}; TOC Interface {toc or '?'}" if ok else detail + " — run `ramble install`", ok))
+
+    sv = paths.saved_variables_files()
+    if sv:
+        newest = max(sv, key=lambda p: p.stat().st_mtime)
+        when = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        checks.append(Check("SavedVariables", "FOUND", f"{len(sv)} file(s); newest {paths.redact(newest)} at {when}", True))
+    else:
+        checks.append(Check("SavedVariables", "NOT YET WRITTEN",
+                            "no Rambleon.lua under WTF yet — WoW writes it when you /reload, log out or quit", True, essential=False))
+
+    shots = paths.screenshots_dir
+    if shots and shots.is_dir():
+        n = len([p for p in shots.iterdir() if p.name.startswith("WoWScrnShot_")])
+        checks.append(Check("Screenshots", "FOUND", f"{shots} ({n} screenshots)", True, essential=False))
+    else:
+        checks.append(Check("Screenshots", "NOT YET CREATED", f"{shots} appears after your first in-game screenshot", True, essential=False))
+
+    archive = Archive(paths.archive_dir)
+    try:
+        archive.ensure()
+        sessions = archive.list_sessions()
+        checks.append(Check("Archive", "READY", f"{paths.archive_dir} ({len(sessions)} session(s))", True))
+    except OSError as e:
+        checks.append(Check("Archive", "NOT WRITABLE", f"{paths.archive_dir}: {e}", False))
+
+    pid = archive.watcher_pid()
+    if pid:
+        checks.append(Check("Watcher", "RUNNING", f"ramble watch (pid {pid})", True, essential=False))
+    else:
+        checks.append(Check("Watcher", "READY", "not running — start `ramble watch` before you play", True, essential=False))
+
+    chars = _character_folders(paths)
+    latest = archive.list_sessions()[-1] if archive.list_sessions() else None
+    if latest:
+        checks.append(Check("Character", "KNOWN", f"{latest.get('character')} (last session {datetime.fromtimestamp(latest.get('startedAt') or 0):%Y-%m-%d})", True, essential=False))
+    elif chars:
+        checks.append(Check("Character", "SEEN IN WTF", ", ".join(chars), True, essential=False))
+    else:
+        checks.append(Check("Character", "UNKNOWN", "no sessions archived yet", True, essential=False))
+
+    claude = shutil.which("claude")
+    if claude:
+        try:
+            v = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            v = "version unknown"
+        checks.append(Check("Claude CLI", "FOUND", f"{claude} ({v})", True, essential=False))
+    else:
+        checks.append(Check("Claude CLI", "NOT FOUND", "optional; `ramble summarize` will still write the prompt", True, essential=False))
+    return checks

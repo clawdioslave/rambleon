@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Offline checks: Lua syntax, the simulated in-game session, and the companion's pytest suite.
+set -euo pipefail
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+echo "== luac -p"
+for f in addon/Rambleon/*.lua; do luac -p "$f"; done
+echo "ok"
+echo "== simulated session"
+lua addon/tests/run.lua
+echo "== pytest"
+cd companion && uv run pytest -q "$@"
