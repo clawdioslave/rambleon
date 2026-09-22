@@ -17,4 +17,3 @@ Journal.lua
 Events.lua
 UI.lua
 Commands.lua
-Bindings.xml
