@@ -45,6 +45,14 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - `ramble watch` now runs export → journal → page → publish automatically when an ended chapter is captured.
 - `ramble reprocess` rebuilds normalized sessions from raw snapshots after companion upgrades.
 
+### Design change: running log, no END CHAPTER (player feedback)
+- The END CHAPTER button is gone. The log just runs; logout writes it; `/ramble save` is an optional flush.
+- A chapter is now a *night*: every session of an evening stitched together (`companion/src/rambleon/nights.py`).
+  `ramble nights`, `ramble export tonight`, `ramble summarize tonight`, `ramble page tonight`.
+- `ramble watch` finalizes a night ten minutes after the last write (the AddOn's resume window), or at once after
+  `/ramble save`, then exports, journals, builds the page and publishes to the game.
+- RESUMED markers are kept in the data but hidden from every rendered timeline.
+
 ### Known issue found tonight
 - The standalone `claude` CLI on this Mac reports "OAuth access token has been revoked", so `ramble summarize` skipped
   the AI chapter and only wrote the prompt (correct degraded behaviour). Fix on the Mac: run `claude` in a terminal

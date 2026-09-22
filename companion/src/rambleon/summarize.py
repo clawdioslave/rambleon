@@ -36,6 +36,8 @@ def build_prompt(session: dict[str, Any], chapter: int) -> str:
               f"- Ended formally: {'yes' if session.get('endReason') == 'end_chapter' else 'no (' + str(session.get('endReason')) + ')'}"]
     lines += ["", "## Chronological events (the only facts you may use)", ""]
     for ev in session.get("events", []):
+        if ev.get("type") == "RESUMED":
+            continue
         extra = ""
         if ev.get("type") == "ZONE_ENTER" and ev.get("x") is not None:
             extra = f" [map {ev.get('mapID')}, {ev.get('x')}, {ev.get('y')}]"
@@ -133,7 +135,8 @@ def split_output(text: str) -> tuple[str, str | None]:
 
 def summarize(session: dict[str, Any], archive: Archive, exports_dir: Path, use_ai: bool = True,
               model: str = DEFAULT_MODEL, log=print) -> dict[str, Path | None]:
-    chapter = archive.chapter_number(session)
+    from .nights import chapter_number
+    chapter = chapter_number(archive, session) if session.get("kind") == "night" else archive.chapter_number(session)
     prompt = build_prompt(session, chapter)
     prompt_path = exports_dir / "prompts" / export_filename(session, "-prompt")
     atomic_write_bytes(prompt_path, prompt.encode("utf-8"))

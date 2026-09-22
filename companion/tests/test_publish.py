@@ -28,7 +28,7 @@ def test_publish_roundtrip(tmp_path):
     addon = tmp_path / "addon"; addon.mkdir()
     path = write_chapters_lua(chapters, addon)
     parsed = to_python(parse(path.read_bytes()))["RambleonChapters"]
-    assert parsed[0]["id"] == s["id"] and "Moonhoof" in parsed[0]["log"]
+    assert parsed[0]["id"].startswith("night-") and "Moonhoof" in parsed[0]["log"]
     page = export_html(s, archive, tmp_path / "exports")
     text = page.read_text()
     assert "<h1>Chapter 1" in text and "Travelled with Moonhoof" in text

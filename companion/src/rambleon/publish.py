@@ -10,6 +10,7 @@ from typing import Any
 
 from .archive import Archive, atomic_write_bytes, is_trivial, load_json
 from .export import clock, describe, duration, export_filename, long_date, render_markdown, render_recap
+from .nights import chapter_number as night_number, nights
 from .paths import Paths
 
 MAX_CHAPTERS_IN_GAME = 12
@@ -46,10 +47,8 @@ def lua_string(text: str) -> str:
 
 def build_chapters(archive: Archive, exports_dir: Path) -> list[dict[str, Any]]:
     chapters = []
-    rows = [r for r in archive.list_sessions() if not r.get("trivial")]
-    for row in rows[-MAX_CHAPTERS_IN_GAME:]:
-        session = load_json(archive.normalized_dir / row["file"])
-        number = archive.chapter_number(session)
+    for session in nights(archive)[-MAX_CHAPTERS_IN_GAME:]:
+        number = night_number(archive, session)
         journal = load_journal(exports_dir, session["id"])
         chapters.append({
             "id": session["id"],
@@ -148,6 +147,8 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
             parts.append(f"<figure><img src='{html.escape(str(src))}' alt=''><figcaption>{html.escape(cap)}</figcaption></figure>")
     parts.append("<h2>The Journey</h2><ul>")
     for ev in session.get("events", []):
+        if ev.get("type") == "RESUMED":
+            continue
         parts.append(f"<li>{html.escape(clock(ev.get('t')))} — {html.escape(describe(ev))}</li>")
     parts.append("</ul>")
     notes = [ev for ev in session.get("events", []) if ev.get("type") == "NOTE"]
@@ -158,7 +159,7 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
 
 
 def export_html(session: dict[str, Any], archive: Archive, exports_dir: Path) -> Path:
-    number = archive.chapter_number(session)
+    number = night_number(archive, session) if session.get("kind") == "night" else archive.chapter_number(session)
     journal = load_journal(exports_dir, session["id"])
     out = exports_dir / "html" / export_filename(session).replace(".md", ".html")
     image_dir = out.with_suffix("")  # exports/html/<date>-<slug>/  next to the page

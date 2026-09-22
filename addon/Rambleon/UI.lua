@@ -121,11 +121,10 @@ local function build()
   panel.banner:SetJustifyH("CENTER")
   panel.banner:SetWidth(WIDTH - 60)
 
-  local read = button(panel, "READ CHAPTERS", 150)
-  read:SetPoint("BOTTOM", 0, 48)
-  read:SetScript("OnClick", function() UI.ToggleChapters() end)
+  panel.footer = label(panel, "Your log saves itself when you log out. Chapters appear next login.", 10, INK_SOFT)
+  panel.footer:SetPoint("BOTTOM", 0, 50); panel.footer:SetJustifyH("CENTER"); panel.footer:SetWidth(WIDTH - 50)
   panel.banner:ClearAllPoints()
-  panel.banner:SetPoint("BOTTOM", 0, 78)
+  panel.banner:SetPoint("BOTTOM", 0, 68)
 
   local mark = button(panel, "MARK MOMENT", 112)
   mark:SetPoint("BOTTOMLEFT", 20, 18)
@@ -133,9 +132,9 @@ local function build()
   local note = button(panel, "ADD NOTE", 100)
   note:SetPoint("LEFT", mark, "RIGHT", 6, 0)
   note:SetScript("OnClick", UI.PromptNote)
-  local finish = button(panel, "END CHAPTER", 112)
-  finish:SetPoint("LEFT", note, "RIGHT", 6, 0)
-  finish:SetScript("OnClick", UI.PromptEndChapter)
+  local read = button(panel, "READ CHAPTERS", 112)
+  read:SetPoint("LEFT", note, "RIGHT", 6, 0)
+  read:SetScript("OnClick", function() UI.ToggleChapters() end)
 
   local acc = 0
   panel:SetScript("OnUpdate", function(self, elapsed)
@@ -181,7 +180,7 @@ function UI.Refresh()
     end
   end
   if ns.session and ns.session.state == "ended" then
-    panel.banner:SetText("Chapter ended. Type /reload to save it to disk.")
+    panel.banner:SetText("Saved. Type /reload to write it to disk.")
   elseif UI.bannerUntil and GetTime() < UI.bannerUntil then
     -- keep transient banner
   else
@@ -290,7 +289,7 @@ function UI.ShowChapter(index)
   local text
   if #chapters == 0 then
     f.subtitle:SetText("")
-    text = "No chapters yet.\n\nEnd a chapter with END CHAPTER, then on your Mac run:\n  ramble summarize latest\n(or leave `ramble watch` running and it happens on its own)\nthen /reload here."
+    text = "No chapters yet.\n\nPlay, then log out. With `ramble watch` running on your Mac, tonight's chapter is written about ten minutes after you leave and shows up here next login.\n\nIn a hurry: /ramble save now, then `ramble summarize tonight` on the Mac, then /reload."
   else
     if index < 1 then index = 1 end
     if index > #chapters then index = #chapters end
@@ -341,8 +340,8 @@ StaticPopupDialogs["RAMBLEON_NOTE"] = {
 }
 
 StaticPopupDialogs["RAMBLEON_END"] = {
-  text = "End this chapter and reload the UI to save it?\n\nRambleon needs WoW to write its SavedVariables. Reloading does that.",
-  button1 = "END & SAVE",
+  text = "Save your log to disk now?\n\nThis reloads the UI, which is when WoW writes AddOn data. Logging out does the same thing, so this is optional.",
+  button1 = "SAVE & RELOAD",
   button2 = CANCEL or "Cancel",
   OnAccept = function() UI.EndChapterAndReload() end,
   timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
@@ -354,16 +353,16 @@ end
 
 function UI.PromptEndChapter()
   if not ns.session or ns.session.state ~= "active" then
-    ns.Print("No active chapter. Type /reload to save what is already recorded.")
+    ns.Print("Nothing new to save. Type /reload to write what is already recorded.")
     return
   end
   StaticPopup_Show("RAMBLEON_END")
 end
 
 function UI.EndChapterAndReload()
-  local s = ns.EndSession("end_chapter")
+  local s = ns.EndSession("save")
   if not s then return end
-  ns.Print(string.format("Chapter ended after %s. Saving...", ns.FormatDuration(s.playedSeconds or 0)))
+  ns.Print(string.format("Saving %s of adventure...", ns.FormatDuration(s.playedSeconds or 0)))
   ns.dirty = true
   -- This runs from the popup button click (a hardware event). If Forever protects Reload entirely,
   -- the pcall fails or nothing happens, and we fall back to asking for /reload.
@@ -374,8 +373,8 @@ function UI.EndChapterAndReload()
   end)
   if C_Timer and C_Timer.After then
     C_Timer.After(1, function()
-      ns.Print("The UI did not reload on its own. Type /reload to save this chapter.")
-      UI.Flash("Type /reload to save this chapter.", 30)
+      ns.Print("The UI did not reload on its own. Type /reload to write the log to disk.")
+      UI.Flash("Type /reload to save.", 30)
     end)
   end
   if not ok then ns.Warn("reload blocked") end

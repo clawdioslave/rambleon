@@ -127,6 +127,7 @@ ns.UI.PromptEndChapter()
 assertEq(WoW.lastPopup, "RAMBLEON_END", "end popup")
 StaticPopupDialogs.RAMBLEON_END.OnAccept()
 assertEq(ns.session.state, "ended", "ended")
+assertEq(ns.session.endReason, "save", "end reason")
 assert(WoW.reloadCalled, "reload attempted")
 assert(ns.session.playedSeconds >= 390, "played seconds")
 local ended = ns.session

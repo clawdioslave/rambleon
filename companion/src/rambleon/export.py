@@ -88,13 +88,15 @@ def render_markdown(session: dict[str, Any]) -> str:
     lines.append("  ".join(f"{m}" for m in meta[:1]) + "  ")
     for m in meta[1:]:
         lines.append(m + "  ")
-    if session.get("state") != "ended":
+    if session.get("state") not in ("ended",):
         lines.append("")
-        lines.append("_This chapter was not formally ended; it was captured as last seen._")
+        lines.append("_Still in progress: captured as last seen._")
     lines.append("")
     lines.append("## Journey")
     lines.append("")
     for ev in session.get("events", []):
+        if ev.get("type") == "RESUMED":
+            continue
         lines.append(f"* {clock(ev.get('t'))} — {describe(ev)}")
     lines.append("")
     lines.append("## Progress")
@@ -175,13 +177,13 @@ def render_recap(session: dict[str, Any]) -> str:
 
 def export_filename(session: dict[str, Any], suffix: str = "") -> str:
     started = session.get("startedAt") or 0
-    day = datetime.fromtimestamp(started).strftime("%Y-%m-%d")
+    day = session.get("nightDate") or datetime.fromtimestamp(started).strftime("%Y-%m-%d")
     return f"{day}-{session.get('character', {}).get('slug', 'unknown')}{suffix}.md"
 
 
 def export_session(session: dict[str, Any], exports_dir: Path) -> Path:
     out = exports_dir / "markdown" / export_filename(session)
-    if out.exists():
+    if out.exists() and session.get("kind") != "night":
         # Several sessions on one day: keep them apart with the session's local start time.
         started = session.get("startedAt") or 0
         stamp = datetime.fromtimestamp(started).strftime("%H%M")

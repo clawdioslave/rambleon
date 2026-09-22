@@ -20,7 +20,7 @@ def test_normalize_sessions():
     sessions = load_sessions()
     assert len(sessions) == 2
     ended, suspended = sessions
-    assert ended["state"] == "ended" and ended["endReason"] == "end_chapter"
+    assert ended["state"] == "ended" and ended["endReason"] == "save"
     assert ended["character"]["slug"] == "rambleon-birdsong"
     assert ended["counters"]["questsCompleted"] == 1
     assert [e["t"] for e in ended["events"]] == sorted(e["t"] for e in ended["events"])

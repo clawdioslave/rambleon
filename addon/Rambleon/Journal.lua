@@ -39,9 +39,10 @@ function J.RecentEvents(n)
   local s = ns.session
   local out = {}
   if not s then return out end
-  local total = #s.events
-  for i = math.max(1, total - n + 1), total do
-    table.insert(out, s.events[i])
+  for i = #s.events, 1, -1 do
+    local ev = s.events[i]
+    if ev.type ~= "RESUMED" then table.insert(out, 1, ev) end
+    if #out >= n then break end
   end
   return out
 end

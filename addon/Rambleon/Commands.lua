@@ -7,7 +7,7 @@ local function help()
   ns.Print("  /ramble status — one-line summary of tonight")
   ns.Print("  /ramble note <text> — write down what just happened")
   ns.Print("  /ramble mark — remember this moment")
-  ns.Print("  /ramble end — end the chapter (asks before reloading)")
+  ns.Print("  /ramble save — write the log to disk now (asks before reloading; logging out does it anyway)")
   ns.Print("  /ramble chapters — read past chapters (published from your Mac)")
   ns.Print("  /ramble debug — addon and client diagnostics")
   ns.Print("  /ramble dump — the last 20 events")
@@ -30,7 +30,7 @@ local function handle(msg)
     end
   elseif cmd == "mark" then
     if ns.MarkMoment() then ns.UI.MomentRemembered() end
-  elseif cmd == "end" then
+  elseif cmd == "save" or cmd == "end" then
     ns.UI.PromptEndChapter()
   elseif cmd == "debug" then
     if rest == "on" then ns.debugEnabled = true elseif rest == "off" then ns.debugEnabled = false end

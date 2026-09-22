@@ -17,7 +17,9 @@ from .doctor import run_doctor
 from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
+from .nights import nights as list_nights, resolve_night
 from .publish import export_html, publish_chapters
+from .watch import Finalizer
 from .summarize import DEFAULT_MODEL, summarize as run_summarize
 from .watch import ingest_once, reprocess as run_reprocess, watch as run_watch
 
@@ -43,6 +45,16 @@ def _load(ref: str) -> dict:
         console.print(f"[red]no archived session matches {ref!r}[/red] — try `ramble sessions`")
         raise typer.Exit(1)
     return session
+
+
+def _night(ref: str) -> dict:
+    """A chapter = a night. ref: latest | tonight | YYYY-MM-DD | night id | session id."""
+    archive, _ = _archive()
+    night = resolve_night(archive, ref)
+    if night is None:
+        console.print(f"[red]no night matches {ref!r}[/red] — try `ramble nights`")
+        raise typer.Exit(1)
+    return night
 
 
 @app.command()
@@ -76,18 +88,19 @@ def install(copy: bool = typer.Option(False, "--copy", help="Copy the AddOn inst
     console.print("Now /reload in WoW (or restart it if Rambleon was not loaded before).")
 
 
-def _finish_chapter(archive: Archive, paths, use_ai: bool, model: str):
-    """What happens after an ended chapter is archived: export, journal, HTML, publish to the game."""
-    def after(session: dict) -> None:
-        md = export_session(session, paths.exports_dir)
+def _finish_night(archive: Archive, paths, use_ai: bool, model: str):
+    """What happens when a night is over: export, journal, HTML, publish to the game."""
+    def run(session: dict) -> None:
+        night = resolve_night(archive, session["id"]) or session
+        md = export_session(night, paths.exports_dir)
         log(f"exported {md.name}")
         if use_ai:
-            run_summarize(session, archive, paths.exports_dir, use_ai=True, model=model, log=log)
-        page = export_html(session, archive, paths.exports_dir)
+            run_summarize(night, archive, paths.exports_dir, use_ai=True, model=model, log=log)
+        page = export_html(night, archive, paths.exports_dir)
         log(f"story page {page}")
         _, n = publish_chapters(archive, paths)
-        log(f"published {n} chapter(s) to the game — /reload in WoW, then /ramble chapters")
-    return after
+        log(f"published {n} chapter(s) to the game — they show under /ramble chapters after the next login or /reload")
+    return run
 
 
 @app.command()
@@ -102,9 +115,10 @@ def watch(interval: float = typer.Option(1.0, help="Seconds between polls."),
     if paths.wow_dir is None:
         console.print("[red]WoW directory not found[/red] (set RAMBLEON_WOW_DIR)")
         raise typer.Exit(1)
-    after = None if no_auto else _finish_chapter(archive, paths, use_ai=not no_ai, model=model)
+    finalizer = None if no_auto else Finalizer(_finish_night(archive, paths, use_ai=not no_ai, model=model), log)
     try:
-        run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots, after_capture=after)
+        run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots,
+                  after_capture=finalizer.on_capture if finalizer else None, tick=finalizer.tick if finalizer else None)
     except KeyboardInterrupt:
         console.print("\nstopped.")
 
@@ -118,10 +132,30 @@ def publish() -> None:
 
 
 @app.command()
+def nights() -> None:
+    """List chapters: one per night, per character."""
+    archive, _ = _archive()
+    rows = list_nights(archive)
+    if not rows:
+        console.print("no nights archived yet.")
+        return
+    table = Table(box=None, header_style="bold")
+    for col in ("Night", "Character", "Duration", "Lv", "Quests", "Places", "Kills", "Deaths", "People", "Sessions", "State"):
+        table.add_column(col)
+    for n in rows:
+        c = n["counters"]; ch = n["character"]
+        lv = f"{ch.get('startLevel', '?')}→{ch.get('endLevel', '?')}" if ch.get("startLevel") != ch.get("endLevel") else str(ch.get("endLevel", "?"))
+        table.add_row(n["nightDate"], str(ch.get("displayName")), duration(n.get("playedSeconds")), lv, str(c.get("questsCompleted", 0)),
+                      str(len(n["zones"])), str(c.get("kills", 0)), str(c.get("deaths", 0)), str(len(n["people"])),
+                      str(len(n["sessionIds"])), n["state"])
+    console.print(table)
+
+
+@app.command()
 def page(ref: str = typer.Argument("latest"), open_it: bool = typer.Option(True, "--open/--no-open")) -> None:
-    """Build the HTML story page (journal, recap, screenshots, timeline) and open it in the browser."""
+    """Build the HTML story page for a night (journal, recap, screenshots, timeline) and open it in the browser."""
     archive, paths = _archive()
-    session = _load(ref)
+    session = _night(ref)
     out = export_html(session, archive, paths.exports_dir)
     console.print(f"story page {out}")
     if open_it and sys.platform == "darwin":
@@ -198,13 +232,12 @@ def show(ref: str = typer.Argument("latest"), as_json: bool = typer.Option(False
 
 
 @app.command()
-def export(ref: str = typer.Argument("latest"), all_sessions: bool = typer.Option(False, "--all")) -> None:
-    """Write the factual Markdown adventure log to exports/markdown/."""
+def export(ref: str = typer.Argument("latest"), all_nights: bool = typer.Option(False, "--all")) -> None:
+    """Write the factual Markdown log of a night (latest | tonight | YYYY-MM-DD | session id) to exports/markdown/."""
     archive, paths = _archive()
-    refs = [s["id"] for s in archive.list_sessions()] if all_sessions else [ref]
-    for r in refs:
-        session = _load(r)
-        out = export_session(session, paths.exports_dir)
+    targets = list_nights(archive) if all_nights else [_night(ref)]
+    for night in targets:
+        out = export_session(night, paths.exports_dir)
         console.print(f"exported {out}")
 
 
@@ -212,9 +245,9 @@ def export(ref: str = typer.Argument("latest"), all_sessions: bool = typer.Optio
 def summarize(ref: str = typer.Argument("latest"),
               no_ai: bool = typer.Option(False, "--no-ai", help="Only write the prompt; do not call the Claude CLI."),
               model: str = typer.Option(DEFAULT_MODEL, "--model")) -> None:
-    """Write the journal prompt and, if the Claude CLI is available, the AI-written chapter."""
+    """Write the journal prompt for a night and, if the Claude CLI is available, the AI-written chapter."""
     archive, paths = _archive()
-    session = _load(ref)
+    session = _night(ref)
     result = run_summarize(session, archive, paths.exports_dir, use_ai=not no_ai, model=model, log=log)
     for k, v in result.items():
         if v:

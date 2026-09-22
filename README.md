@@ -41,24 +41,26 @@ ramble watch             # leave running in a terminal while you play
 ```
 
 In game: `/ramble` opens the log. Play. `/ramble note this cave is extremely cursed`. `/ramble mark`.
-When you are done: **END CHAPTER → END & SAVE** (reloads the UI so WoW writes the file; if the reload is blocked,
-type `/reload`). The watcher prints `captured …`. Then:
+When you are done, just log out. WoW writes the log to disk on logout (and on every `/reload`); the watcher prints
+`captured …`, waits ten minutes in case you come back, and then writes the night's chapter. Or, at any time:
 
 ```bash
-ramble export latest     # exports/markdown/2026-09-21-rambleon-birdsong.md (factual)
-ramble summarize latest  # exports/prompts/... and, with the Claude CLI installed, the journal chapter + recap
+ramble export tonight    # exports/markdown/2026-09-21-rambleon-birdsong.md (factual)
+ramble summarize tonight # exports/prompts/... and, with the Claude CLI installed, the journal chapter + recap
 ```
 
-While `ramble watch` is running, ending a chapter does all of this automatically: export, journal (if the Claude CLI is
-logged in), an HTML story page with your screenshots in `exports/html/`, and a `Chapters.lua` published into the AddOn.
-After a `/reload`, `/ramble chapters` in game shows the story with selectable text (Ctrl-A, Ctrl-C) for pasting anywhere.
+**A chapter is a night in Azeroth.** Every session you played that evening (reloads, relogs, a break for dinner) is
+stitched into one chapter. While `ramble watch` is running, finishing a night does all of this automatically: export,
+journal (if the Claude CLI is logged in), an HTML story page with your screenshots in `exports/html/`, and a
+`Chapters.lua` published into the AddOn. Next login, `/ramble chapters` shows the story with selectable text (Ctrl-A,
+Ctrl-C) for pasting anywhere. `/ramble save` flushes the log to disk right now if you cannot wait for logout.
 
 Also: `ramble sessions`, `ramble show latest`, `ramble status`, `ramble page latest` (opens the story page),
 `ramble publish`, `ramble ingest` (one-shot capture if the watcher was not running), `ramble reprocess` (rebuild after upgrades).
 
 ## In-game commands
 
-`/ramble` · `/ramble status` · `/ramble note <text>` · `/ramble mark` · `/ramble end` · `/ramble chapters` · `/ramble debug [on|off]` · `/ramble dump`
+`/ramble` · `/ramble status` · `/ramble note <text>` · `/ramble mark` · `/ramble chapters` · `/ramble save` · `/ramble debug [on|off]` · `/ramble dump`
 
 Keybindings: "Open Adventure Log" and "Mark Moment" under AddOns in the Key Bindings menu.
 

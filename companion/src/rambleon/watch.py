@@ -35,6 +35,36 @@ def _read(path: Path) -> bytes | None:
 
 
 AfterCapture = Callable[[dict[str, Any]], None] | None
+FINALIZE_GRACE = 15  # seconds after the resume window
+
+
+class Finalizer:
+    """Decides when a night is over. An explicitly ended session finalizes at once; a suspended one waits
+    until nobody has resumed it (the AddOn's 10-minute window) — that is what a logout looks like from here."""
+
+    def __init__(self, run: Callable[[dict[str, Any]], None], log: Log, timeout: float | None = None):
+        from .model import SUSPEND_TIMEOUT
+        self.run = run
+        self.log = log
+        self.timeout = (SUSPEND_TIMEOUT + FINALIZE_GRACE) if timeout is None else timeout
+        self.pending: dict[str, tuple[float, dict[str, Any]]] = {}
+
+    def on_capture(self, session: dict[str, Any]) -> None:
+        slug = session.get("character", {}).get("slug", "unknown")
+        if session.get("state") == "ended":
+            self.pending.pop(slug, None)
+            self.run(session)
+        else:
+            self.pending[slug] = (time.time() + self.timeout, session)
+            self.log(f"{session['character'].get('displayName')} is still playing (or reloading); the chapter is written "
+                     f"{int(self.timeout // 60)} min after the last save")
+
+    def tick(self) -> None:
+        now = time.time()
+        for slug, (due, session) in list(self.pending.items()):
+            if now >= due:
+                del self.pending[slug]
+                self.run(session)
 
 
 def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False,
@@ -103,7 +133,7 @@ def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_scre
         summary = f"{len(s.get('events', []))} events, {s.get('state')}"
         if outcome in ("new", "updated"):
             log(f"captured {s['id']} ({summary}) → {out_path.name if out_path else '?'} [{outcome}]")
-            if after_capture and s.get("state") == "ended" and not is_trivial(s):
+            if after_capture and not is_trivial(s):
                 try:
                     after_capture(s)
                 except Exception as e:  # the archive is safe; post-processing must never kill the watcher
@@ -156,7 +186,8 @@ def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool
 
 
 def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_screenshots: bool = False,
-          stop_after: float | None = None, rescan: float = 5.0, after_capture: AfterCapture = None) -> None:
+          stop_after: float | None = None, rescan: float = 5.0, after_capture: AfterCapture = None,
+          tick: Callable[[], None] | None = None) -> None:
     archive.ensure()
     archive.pid_path.write_text(str(os.getpid()))
     tracked: dict[Path, dict[str, Any]] = {}
@@ -189,6 +220,8 @@ def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_
                 if st["stable"] >= STABLE_POLLS and sig != st["done"]:
                     st["done"] = sig
                     process_file(f, paths, archive, log, copy_screenshots, after_capture=after_capture)
+            if tick:
+                tick()
             if stop_after is not None and time.time() - started >= stop_after:
                 return
             time.sleep(interval)
