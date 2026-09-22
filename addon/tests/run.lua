@@ -77,6 +77,13 @@ ns.HandleSlash("")                               -- toggles panel (builds UI)
 assert(RambleonPanel:IsShown(), "panel shown")
 ns.UI.Refresh()
 ns.HandleSlash("debug")
+ns.HandleSlash("chapters")                       -- builds the chapters frame with no data
+assert(RambleonChaptersFrame:IsShown(), "chapters frame shown")
+_G.RambleonChapters = { { id = "x", slug = "rambleon-birdsong", date = "Today", duration = "1m", title = "Chapter 1 — Test",
+  recap = "1m in Azeroth.", journal = "It was fine.", log = "# log", number = 1, startedAt = 1 } }
+ns.UI.ShowChapter(1)
+assert(RambleonChaptersText:GetText():find("It was fine"), "chapter text shown")
+ns.HandleSlash("chapters")
 assertEq(ns.session.counters.notes, 1, "notes")
 assertEq(ns.session.counters.marks, 1, "marks")
 

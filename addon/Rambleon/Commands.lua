@@ -8,6 +8,7 @@ local function help()
   ns.Print("  /ramble note <text> — write down what just happened")
   ns.Print("  /ramble mark — remember this moment")
   ns.Print("  /ramble end — end the chapter (asks before reloading)")
+  ns.Print("  /ramble chapters — read past chapters (published from your Mac)")
   ns.Print("  /ramble debug — addon and client diagnostics")
   ns.Print("  /ramble dump — the last 20 events")
 end
@@ -43,6 +44,8 @@ local function handle(msg)
       local ev = s.events[i]
       ns.Print(string.format("%s  %s  [%s]", ns.FormatClock(ev.t), ns.Journal.DescribeEvent(ev), ev.type))
     end
+  elseif cmd == "chapters" or cmd == "read" then
+    ns.UI.ToggleChapters()
   elseif cmd == "help" then
     help()
   else

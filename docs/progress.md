@@ -32,10 +32,18 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - WoW wrote `Rambleon.lua` on `/reload`; `ramble watch` captured it within seconds and archived the session.
 - **SavedVariables were restored across `/reload`** for this player (the session resumed: "Picked the story back up").
   Cold start behaviour still unknown.
-- Bindings.xml must not use the `header` attribute on this client (fixed).
+- **`C_UI.Reload()` works from the END & SAVE button** on Forever (confirmed by the player).
+- Bindings.xml must not use the `header` attribute, and must not be listed in the TOC at all (fixed).
 - Group members and the zone were logged twice after a resume (fixed: the resume seeds roster and zone silently).
 - Kills were invisible. Added kill tracking from the "X dies, you gain N experience." chat line, XP accounting,
   and quest objective completion events. The combat log stays untouched.
+
+### Added after the first session
+- `/ramble chapters`: an in-game reader for published chapters (journal or factual log + recap) with selectable text.
+  The companion writes `addon/Rambleon/Chapters.lua`; WoW loads it as an addon file on `/reload`.
+- `ramble page latest`: HTML story page (journal, recap, stats, screenshots, timeline) in `exports/html/` for Substack.
+- `ramble watch` now runs export → journal → page → publish automatically when an ended chapter is captured.
+- `ramble reprocess` rebuilds normalized sessions from raw snapshots after companion upgrades.
 
 ### Known issue found tonight
 - The standalone `claude` CLI on this Mac reports "OAuth access token has been revoked", so `ramble summarize` skipped

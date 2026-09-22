@@ -121,6 +121,12 @@ local function build()
   panel.banner:SetJustifyH("CENTER")
   panel.banner:SetWidth(WIDTH - 60)
 
+  local read = button(panel, "READ CHAPTERS", 150)
+  read:SetPoint("BOTTOM", 0, 48)
+  read:SetScript("OnClick", function() UI.ToggleChapters() end)
+  panel.banner:ClearAllPoints()
+  panel.banner:SetPoint("BOTTOM", 0, 78)
+
   local mark = button(panel, "MARK MOMENT", 112)
   mark:SetPoint("BOTTOMLEFT", 20, 18)
   mark:SetScript("OnClick", function() if ns.MarkMoment() then UI.MomentRemembered() end end)
@@ -201,6 +207,113 @@ function UI.MomentRemembered()
   if PlaySound and SOUNDKIT and SOUNDKIT.IG_QUEST_LOG_OPEN then
     pcall(PlaySound, SOUNDKIT.IG_QUEST_LOG_OPEN)
   end
+end
+
+-- Chapters: journal text published by the Mac companion into Chapters.lua ----------------------
+
+local chaptersFrame
+local CH_WIDTH, CH_HEIGHT = 560, 600
+
+local function myChapters()
+  local all = _G.RambleonChapters
+  if type(all) ~= "table" then return {} end
+  local me = ns.Slug(ns.DisplayName())
+  local out = {}
+  for _, c in ipairs(all) do
+    if type(c) == "table" and (c.slug == me or c.slug == nil) then table.insert(out, c) end
+  end
+  table.sort(out, function(a, b) return (a.startedAt or 0) < (b.startedAt or 0) end)
+  return out
+end
+
+local function buildChapters()
+  local template = BackdropTemplateMixin and "BackdropTemplate" or nil
+  local f = CreateFrame("Frame", "RambleonChaptersFrame", UIParent, template)
+  chaptersFrame = f
+  f:SetSize(CH_WIDTH, CH_HEIGHT)
+  f:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
+  f:SetFrameStrata("HIGH")
+  f:SetMovable(true); f:EnableMouse(true); f:SetClampedToScreen(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  if f.SetBackdrop then
+    f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                    tile = false, edgeSize = 32, insets = { left = 10, right = 10, top = 10, bottom = 10 } })
+    f:SetBackdropColor(0.90, 0.82, 0.64, 0.98)
+    f:SetBackdropBorderColor(0.75, 0.60, 0.35, 1)
+  end
+  tinsert(UISpecialFrames, "RambleonChaptersFrame")
+  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -4, -4)
+
+  f.title = label(f, "CHAPTERS", 20, GOLD, TITLE_FONT)
+  f.title:SetPoint("TOP", 0, -20); f.title:SetJustifyH("CENTER")
+  f.subtitle = label(f, "", 11, INK_SOFT)
+  f.subtitle:SetPoint("TOP", f.title, "BOTTOM", 0, -2); f.subtitle:SetJustifyH("CENTER")
+
+  local scroll = CreateFrame("ScrollFrame", "RambleonChaptersScroll", f, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 24, -70)
+  scroll:SetPoint("BOTTOMRIGHT", -44, 60)
+  local edit = CreateFrame("EditBox", "RambleonChaptersText", scroll)
+  edit:SetMultiLine(true)
+  edit:SetAutoFocus(false)
+  edit:SetWidth(CH_WIDTH - 80)
+  setFont(edit, BODY_FONT, 12)
+  edit:SetTextColor(INK[1], INK[2], INK[3])
+  edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  edit:SetScript("OnTextChanged", function(self, userInput)
+    if userInput then self:SetText(UI.chapterContent or "") end   -- read-only, still selectable
+  end)
+  scroll:SetScrollChild(edit)
+  f.edit = edit
+
+  f.hint = label(f, "Click the text, then Ctrl-A and Ctrl-C to copy it.", 10, INK_SOFT)
+  f.hint:SetPoint("BOTTOM", 0, 44); f.hint:SetJustifyH("CENTER")
+
+  local prev = button(f, "< OLDER", 90)
+  prev:SetPoint("BOTTOMLEFT", 20, 16)
+  prev:SetScript("OnClick", function() UI.ShowChapter((UI.chapterIndex or 1) - 1) end)
+  local nxt = button(f, "NEWER >", 90)
+  nxt:SetPoint("BOTTOMRIGHT", -20, 16)
+  nxt:SetScript("OnClick", function() UI.ShowChapter((UI.chapterIndex or 1) + 1) end)
+  local mode = button(f, "STORY / LOG", 110)
+  mode:SetPoint("BOTTOM", 0, 16)
+  mode:SetScript("OnClick", function() UI.chapterShowLog = not UI.chapterShowLog; UI.ShowChapter(UI.chapterIndex or 1) end)
+  f:Hide()
+  return f
+end
+
+function UI.ShowChapter(index)
+  local f = chaptersFrame or buildChapters()
+  local chapters = myChapters()
+  local text
+  if #chapters == 0 then
+    f.subtitle:SetText("")
+    text = "No chapters yet.\n\nEnd a chapter with END CHAPTER, then on your Mac run:\n  ramble summarize latest\n(or leave `ramble watch` running and it happens on its own)\nthen /reload here."
+  else
+    if index < 1 then index = 1 end
+    if index > #chapters then index = #chapters end
+    UI.chapterIndex = index
+    local c = chapters[index]
+    f.subtitle:SetText(string.format("%s  ·  %s  ·  %d of %d", c.date or "", c.duration or "", index, #chapters))
+    if UI.chapterShowLog or not c.journal or c.journal == "" then
+      text = (c.title or "") .. "\n\n" .. (c.recap or "") .. "\n\n" .. (c.log or "")
+    else
+      text = (c.journal or "") .. "\n\n" .. (c.recap or "")
+    end
+  end
+  UI.chapterContent = text
+  f.edit:SetText(text)
+  f.edit:SetCursorPosition(0)
+  f:Show()
+end
+
+function UI.ToggleChapters()
+  local f = chaptersFrame or buildChapters()
+  if f:IsShown() then f:Hide() return end
+  local chapters = myChapters()
+  UI.ShowChapter(UI.chapterIndex or #chapters)
 end
 
 -- Popups -----------------------------------------------------------------------

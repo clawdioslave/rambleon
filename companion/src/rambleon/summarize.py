@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .archive import Archive, atomic_write_bytes
-from .export import clock, describe, duration, export_filename, long_date
+from .archive import Archive, atomic_write_bytes, atomic_write_json
+from .export import clock, describe, duration, export_filename, long_date, render_recap
 
 RULES_PATH = Path(__file__).parent / "prompts" / "journal.md"
 RECAP_MARKER = "---RECAP---"
@@ -150,6 +150,15 @@ def summarize(session: dict[str, Any], archive: Archive, exports_dir: Path, use_
         log(f"AI journal skipped: {diag}. The prompt is at {prompt_path}.")
         return result
     journal, recap = split_output(text)
+    title = None
+    for line in journal.splitlines():
+        if line.startswith("#"):
+            title = line.lstrip("#").strip()
+            break
+    atomic_write_json(exports_dir / "journal" / f"{session['id']}.json", {
+        "sessionId": session["id"], "chapter": chapter, "title": title, "journal": journal,
+        "recap": recap or render_recap(session), "model": model, "createdAt": int(__import__("time").time()),
+    })
     journal_path = exports_dir / "markdown" / export_filename(session, "-journal")
     header = f"_{session.get('character', {}).get('displayName')} · {long_date(session.get('startedAt'))} · {duration(session.get('playedSeconds'))} in Azeroth_\n\n"
     atomic_write_bytes(journal_path, (journal.rstrip() + "\n\n" + header).encode("utf-8"))

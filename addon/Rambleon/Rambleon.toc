@@ -10,6 +10,7 @@
 ## X-Flavor: generic
 
 Util.lua
+Chapters.lua
 Core.lua
 Session.lua
 Journal.lua

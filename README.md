@@ -49,11 +49,16 @@ ramble export latest     # exports/markdown/2026-09-21-rambleon-birdsong.md (fac
 ramble summarize latest  # exports/prompts/... and, with the Claude CLI installed, the journal chapter + recap
 ```
 
-`ramble sessions`, `ramble show latest`, `ramble status`, and `ramble ingest` (one-shot capture if the watcher was not running).
+While `ramble watch` is running, ending a chapter does all of this automatically: export, journal (if the Claude CLI is
+logged in), an HTML story page with your screenshots in `exports/html/`, and a `Chapters.lua` published into the AddOn.
+After a `/reload`, `/ramble chapters` in game shows the story with selectable text (Ctrl-A, Ctrl-C) for pasting anywhere.
+
+Also: `ramble sessions`, `ramble show latest`, `ramble status`, `ramble page latest` (opens the story page),
+`ramble publish`, `ramble ingest` (one-shot capture if the watcher was not running), `ramble reprocess` (rebuild after upgrades).
 
 ## In-game commands
 
-`/ramble` · `/ramble status` · `/ramble note <text>` · `/ramble mark` · `/ramble end` · `/ramble debug [on|off]` · `/ramble dump`
+`/ramble` · `/ramble status` · `/ramble note <text>` · `/ramble mark` · `/ramble end` · `/ramble chapters` · `/ramble debug [on|off]` · `/ramble dump`
 
 Keybindings: "Open Adventure Log" and "Mark Moment" under AddOns in the Key Bindings menu.
 

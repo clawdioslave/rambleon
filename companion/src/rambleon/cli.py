@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from .doctor import run_doctor
 from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
+from .publish import export_html, publish_chapters
 from .summarize import DEFAULT_MODEL, summarize as run_summarize
 from .watch import ingest_once, reprocess as run_reprocess, watch as run_watch
 
@@ -74,18 +76,56 @@ def install(copy: bool = typer.Option(False, "--copy", help="Copy the AddOn inst
     console.print("Now /reload in WoW (or restart it if Rambleon was not loaded before).")
 
 
+def _finish_chapter(archive: Archive, paths, use_ai: bool, model: str):
+    """What happens after an ended chapter is archived: export, journal, HTML, publish to the game."""
+    def after(session: dict) -> None:
+        md = export_session(session, paths.exports_dir)
+        log(f"exported {md.name}")
+        if use_ai:
+            run_summarize(session, archive, paths.exports_dir, use_ai=True, model=model, log=log)
+        page = export_html(session, archive, paths.exports_dir)
+        log(f"story page {page}")
+        _, n = publish_chapters(archive, paths)
+        log(f"published {n} chapter(s) to the game — /reload in WoW, then /ramble chapters")
+    return after
+
+
 @app.command()
 def watch(interval: float = typer.Option(1.0, help="Seconds between polls."),
-          copy_screenshots: bool = typer.Option(False, "--copy-screenshots", help="Copy matching screenshots into the archive.")) -> None:
-    """Watch SavedVariables and archive every session WoW writes. Leave this running while you play."""
+          copy_screenshots: bool = typer.Option(False, "--copy-screenshots", help="Copy matching screenshots into the archive."),
+          no_ai: bool = typer.Option(False, "--no-ai", help="Do not call the Claude CLI when a chapter ends."),
+          no_auto: bool = typer.Option(False, "--no-auto", help="Only archive; skip export/journal/publish."),
+          model: str = typer.Option(DEFAULT_MODEL, "--model")) -> None:
+    """Watch SavedVariables and archive every session WoW writes. Leave this running while you play.
+    When a chapter ends it also exports it, writes the journal, builds the story page and publishes it to the game."""
     archive, paths = _archive()
     if paths.wow_dir is None:
         console.print("[red]WoW directory not found[/red] (set RAMBLEON_WOW_DIR)")
         raise typer.Exit(1)
+    after = None if no_auto else _finish_chapter(archive, paths, use_ai=not no_ai, model=model)
     try:
-        run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots)
+        run_watch(paths, archive, log, interval=interval, copy_screenshots=copy_screenshots, after_capture=after)
     except KeyboardInterrupt:
         console.print("\nstopped.")
+
+
+@app.command()
+def publish() -> None:
+    """Write the latest chapters into the AddOn (Chapters.lua) so /ramble chapters can show them in game."""
+    archive, paths = _archive()
+    path, n = publish_chapters(archive, paths)
+    console.print(f"published {n} chapter(s) → {path}. In WoW: /reload, then /ramble chapters.")
+
+
+@app.command()
+def page(ref: str = typer.Argument("latest"), open_it: bool = typer.Option(True, "--open/--no-open")) -> None:
+    """Build the HTML story page (journal, recap, screenshots, timeline) and open it in the browser."""
+    archive, paths = _archive()
+    session = _load(ref)
+    out = export_html(session, archive, paths.exports_dir)
+    console.print(f"story page {out}")
+    if open_it and sys.platform == "darwin":
+        subprocess.run(["open", str(out)], check=False)
 
 
 @app.command()
@@ -179,6 +219,10 @@ def summarize(ref: str = typer.Argument("latest"),
     for k, v in result.items():
         if v:
             console.print(f"{k}: {v}")
+    page_path = export_html(session, archive, paths.exports_dir)
+    console.print(f"story page: {page_path}")
+    _, n = publish_chapters(archive, paths)
+    console.print(f"published {n} chapter(s) to the game — /reload in WoW, then /ramble chapters")
 
 
 def main() -> None:

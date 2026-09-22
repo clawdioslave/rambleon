@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .archive import Archive, blake
+from .archive import Archive, blake, is_trivial
 from .luaparse import LuaParseError, TornFile, parse, to_python
 from .normalize import sessions_from_db
 from .paths import Paths
@@ -34,8 +34,11 @@ def _read(path: Path) -> bytes | None:
         return None
 
 
+AfterCapture = Callable[[dict[str, Any]], None] | None
+
+
 def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False,
-                 allow_bak: bool = True) -> list[str]:
+                 allow_bak: bool = True, after_capture: AfterCapture = None) -> list[str]:
     """Snapshot, parse and archive one SavedVariables file. Returns a list of outcome strings."""
     data = _read(path)
     if data is None:
@@ -72,7 +75,7 @@ def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_scre
         bak = path.with_name(path.name + ".bak")
         if allow_bak and bak.exists():
             log("trying the .bak copy WoW kept from the previous flush")
-            return process_file(bak, paths, archive, log, copy_screenshots, allow_bak=False)
+            return process_file(bak, paths, archive, log, copy_screenshots, allow_bak=False, after_capture=after_capture)
         return [f"failed {path.name}"]
 
     raw_path, h = archive.snapshot_raw(data, path)
@@ -100,6 +103,11 @@ def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_scre
         summary = f"{len(s.get('events', []))} events, {s.get('state')}"
         if outcome in ("new", "updated"):
             log(f"captured {s['id']} ({summary}) → {out_path.name if out_path else '?'} [{outcome}]")
+            if after_capture and s.get("state") == "ended" and not is_trivial(s):
+                try:
+                    after_capture(s)
+                except Exception as e:  # the archive is safe; post-processing must never kill the watcher
+                    log(f"post-processing failed: {e}")
         elif outcome == "rejected":
             log(f"kept existing archive for {s['id']} (incoming copy had fewer events)")
         outcomes.append(f"{outcome} {s['id']}")
@@ -135,19 +143,20 @@ def reprocess(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool =
     return outcomes
 
 
-def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False) -> list[str]:
+def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False,
+                after_capture: AfterCapture = None) -> list[str]:
     files = paths.saved_variables_files()
     if not files:
         log("no Rambleon SavedVariables files found yet (play a session and end the chapter first)")
         return []
     outcomes: list[str] = []
     for f in files:
-        outcomes += process_file(f, paths, archive, log, copy_screenshots)
+        outcomes += process_file(f, paths, archive, log, copy_screenshots, after_capture=after_capture)
     return outcomes
 
 
 def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_screenshots: bool = False,
-          stop_after: float | None = None, rescan: float = 5.0) -> None:
+          stop_after: float | None = None, rescan: float = 5.0, after_capture: AfterCapture = None) -> None:
     archive.ensure()
     archive.pid_path.write_text(str(os.getpid()))
     tracked: dict[Path, dict[str, Any]] = {}
@@ -155,7 +164,7 @@ def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_
     files: list[Path] = []
     started = time.time()
     log("watching for Rambleon SavedVariables writes (Ctrl-C to stop)")
-    ingest_once(paths, archive, log, copy_screenshots)
+    ingest_once(paths, archive, log, copy_screenshots, after_capture=after_capture)
     for f in paths.saved_variables_files():
         tracked[f] = {"sig": _signature(f), "stable": STABLE_POLLS, "done": _signature(f)}
     try:
@@ -179,7 +188,7 @@ def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_
                 st["stable"] += 1
                 if st["stable"] >= STABLE_POLLS and sig != st["done"]:
                     st["done"] = sig
-                    process_file(f, paths, archive, log, copy_screenshots)
+                    process_file(f, paths, archive, log, copy_screenshots, after_capture=after_capture)
             if stop_after is not None and time.time() - started >= stop_after:
                 return
             time.sleep(interval)
