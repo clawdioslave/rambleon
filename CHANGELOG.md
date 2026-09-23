@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Example journal on GitHub Pages (`site/`, refreshed with `scripts/publish-example`).
+
 ## 0.2.0 — 2026-09-22
 
 - The log just runs: no END CHAPTER. Logging out is the save; `/ramble save` is an optional flush.

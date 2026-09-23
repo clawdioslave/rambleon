@@ -1,4 +1,8 @@
-# CLAUDE.md — Rambleon
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Rambleon
 
 Rambleon is a **personal memory layer for World of Warcraft**. You play; it quietly remembers; at the end of the
 night it hands you a permanent record: a timeline, a factual log, a story page, and an AI-written chapter you can
@@ -47,9 +51,15 @@ WoW: Forever → Rambleon AddOn (Lua) → SavedVariables (written on logout and 
 - `addon/tests/` — Lua 5.5 stub + `run.lua`: a scripted session that also emits the parser fixture.
 - `companion/` — Python ≥ 3.11, uv, typer. `src/rambleon/`: `paths` (find WoW/WTF), `luaparse` (safe SV parser),
   `normalize`, `archive`, `watch` (+ `Finalizer`), `wowstate` (logout detection), `nights`, `export`, `summarize`,
-  `publish` (Chapters.lua, HTML), `service` (launchd), `notify`, `config`, `doctor`, `install`, `cli`.
+  `publish` (Chapters.lua, HTML), `service` (launchd), `notify`, `config`, `doctor`, `install`, `cli`,
+  `model` (schema constants), `screenshots` (pairs WoW screenshots with a session by time).
+- The companion wheel **bundles the AddOn** via an explicit per-file `force-include` list in `companion/pyproject.toml`.
+  Adding a file to `addon/Rambleon/` means adding it there too, or `uv tool install` users get a broken AddOn.
+  Without a checkout, `install.py` seeds `~/Rambleon/addon/Rambleon` from the bundled copy.
 - `archive/` — **source of truth**, gitignored. Raw snapshots never edited; normalized sessions never shrink.
 - `exports/` — regenerable, gitignored: `markdown/`, `prompts/`, `journal/` (sidecars), `html/`, `social/`.
+- `site/` — GitHub Pages (`.github/workflows/pages.yml`): landing page + `example/`, a committed snapshot of
+  Rambleon Birdsong's story pages. Refresh with `scripts/publish-example`; committing it makes the journal public.
 - `docs/` — `environment.md` (this Mac), `addon-api.md` (Forever facts + the SV bug), `data-model.md`,
   `progress.md` (running log; read "To verify next session" first), `roadmap.md` (product plan).
 
@@ -92,20 +102,24 @@ Feelings only as reactions to recorded events. Pronouns from the recorded gender
 
 ```
 edit addon/Rambleon/*.lua or companion/src/rambleon/*.py
-scripts/test                    # luac -p, simulated session, pytest (32 tests)
+scripts/test                    # luac -p, simulated session, pytest (same as CI, macos-latest)
+scripts/test -k nights          # extra args go to pytest (single test: -k name, or tests/test_x.py::test_y)
 /reload in WoW                  # AddOn is symlinked; new files need a restart of WoW only when added to the TOC
 ramble service install          # restart the background watcher after companion changes
 /ramble debug                   # paste output + any Lua errors back here
+scripts/publish-example         # copy exports/html into site/example (public once pushed)
 ```
 
 `/console scriptErrors 1` shows Lua errors in game. `scripts/bootstrap` sets up uv and `ramble` from scratch.
+CI (`.github/workflows/ci.yml`) runs `scripts/test`, builds the wheel and zips the AddOn; a `v*` tag makes a GitHub
+release. Record user-facing changes in `CHANGELOG.md` and bump `companion/pyproject.toml` version on release.
 
 ## Command cheat sheet
 
 In game: `/ramble` · `status` · `note <text>` · `mark` · `chapters` · `save` · `debug [on|off]` · `dump` · `help`.
 Keybindings under AddOns: Open Adventure Log, Mark Moment.
 
-Mac: `ramble doctor` · `install [--copy]` · `service install|uninstall|status` · `watch [--no-ai] [--no-auto] [--voice]`
+Mac: `ramble setup [--no-ai]` · `doctor [--fix]` · `uninstall` · `install [--copy]` · `service install|uninstall|status` · `watch [--no-ai] [--no-auto] [--voice]`
 · `ingest` · `reprocess` · `status` · `sessions` · `nights` · `show latest` · `export tonight|YYYY-MM-DD|--all`
 · `summarize tonight [--voice] [--no-ai]` · `page tonight` · `publish` · `voices`.
 

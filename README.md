@@ -9,6 +9,8 @@ journal chapter written from what actually happened, readable in game and ready 
 > as the water: "alone at the lake slayin timberlings".*
 > — Chapter 1, written by Rambleon from one Tuesday night in Teldrassil
 
+**See a real journal:** https://realworldbuilder.github.io/rambleon/example/
+
 Rambleon is a **memory layer**, not a meter. It never automates anything, never reads protected combat data, and
 never needs the network in game. Think Strava recap, travel journal, captain's log.
 
