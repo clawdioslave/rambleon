@@ -5,7 +5,7 @@
 ## Version: 0.1.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## SavedVariablesPerCharacter: RambleonDB
-## X-Website: https://github.com/phishmiami/rambleon
+## X-Website: https://github.com/realworldbuilder/rambleon
 ## X-Category: Miscellaneous
 ## X-Flavor: camelot
 
