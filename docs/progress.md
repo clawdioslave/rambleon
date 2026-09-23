@@ -80,6 +80,16 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
   names not in the evidence; the AddOn records `character.gender` from `UnitSex`; the prompt says to use the
   name or they/them when gender is not recorded.
 
+### 2026-09-22, afternoon — productizing
+- Decisions (William): public GitHub repo now, MIT, Mac only for the first offer, one-command setup first.
+- Public repo: https://github.com/realworldbuilder/rambleon (MIT). CI runs `scripts/test`, builds the wheel and the
+  AddOn zip; a `v*` tag makes a GitHub release with the zip.
+- 0.2.0: `ramble setup` (link AddOn + launchd service + journal index + doctor), `ramble doctor --fix`,
+  `ramble uninstall`, Claude login check in doctor. The wheel bundles the AddOn; without a checkout it is unpacked
+  to `~/Rambleon/addon/Rambleon` and upgraded by TOC version, keeping Chapters.lua.
+- Verified: install from the built wheel in a clean venv against a fake WoW tree (install → doctor → ingest → publish).
+- CLAUDE.md rewritten for the current product; roadmap rewritten as the "offer it" plan (phases A–D).
+
 ### To verify next session
 - Loot capture in the real client (the three greens came before the loot code was loaded; no LOOT events yet).
 - Whether `/ramble chapters` shows tonight's chapter after login (published at 23:27, republished after reprocess).

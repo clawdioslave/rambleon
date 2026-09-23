@@ -1,78 +1,106 @@
 # Rambleon
 
-**Your Azeroth Adventure Journal.** Play World of Warcraft: Forever normally. Rambleon quietly remembers the
-adventure. When the night ends, it hands you a permanent record: a timeline, a factual log, and (optionally) an
-AI-written chapter based only on what actually happened.
+**Your Azeroth adventure journal.** Play World of Warcraft normally. Rambleon quietly remembers the night. When you
+log out, it hands you a permanent record: a timeline, a factual log, a story page with your screenshots, and a
+journal chapter written from what actually happened, readable in game and ready to paste anywhere.
+
+> *At Lake Al'Ameth he found the work turned strange and solitary — timberlings, one after another, seeds and
+> sprouts to be gathered from creatures that should not, by any right, have walked. He wrote it down himself, plain
+> as the water: "alone at the lake slayin timberlings".*
+> — Chapter 1, written by Rambleon from one Tuesday night in Teldrassil
+
+Rambleon is a **memory layer**, not a meter. It never automates anything, never reads protected combat data, and
+never needs the network in game. Think Strava recap, travel journal, captain's log.
+
+**Status:** early, real, and used nightly by its author on the **World of Warcraft: Forever** beta, on **macOS**.
+Windows and other WoW flavours are on the roadmap. MIT licensed.
+
+## What a night looks like
 
 ```
-Rambleon Birdsong
-September 21, 2026
-2h 14m in Azeroth
+Rambleon Birdsong · September 21, 2026 · 1h 47m in Azeroth
 
-8:17 PM — Entered Dolanaar
-8:24 PM — Accepted "The Emerald Dreamcatcher"
-8:41 PM — Reached Level 12
-8:53 PM — Died in Fel Rock
-9:04 PM — Joined forces with Moonhoof
+ 9:47 PM — Began the adventure
+ 9:47 PM — Joined forces with Hazardelf (Rogue)
+ 9:55 PM — Completed "Zenn's Bidding"
+10:01 PM — Entered Starbreeze Village (Teldrassil)
+10:13 PM — 8/8 Timberling Seed — "Timberling Seeds"
+10:14 PM — Note: "alone at the lake slayin timberlings"
+10:24 PM — Reached Level 9
+11:01 PM — Joined forces with Tiamaat (Druid)
+
+Levels gained: 1 (8 → 9) · Quests completed: 10 · Enemies slain: 63 · Places visited: 9 · People: 2
 ```
 
-Two parts:
+Then a chapter in your chosen voice, a short recap for socials, and an HTML story page, all built by themselves
+after you log out. In game, `/ramble chapters` shows the chapter with selectable text.
 
-1. **The AddOn** (`addon/Rambleon`) listens for game events, keeps the current session in memory, shows a small
-   parchment panel (`/ramble`), lets you mark moments and write notes, and hands the session to WoW's SavedVariables.
-2. **The Mac companion** (`companion/`, command `ramble`) watches the SavedVariables file, snapshots every write into an
-   immutable archive, converts it to JSON, and produces Markdown reports and AI journal prompts.
+## Install (macOS)
 
-The archive on the Mac is the source of truth. This matters because the current Forever beta does not restore AddOn
-SavedVariables on the next launch (see `docs/addon-api.md`). WoW may forget; Rambleon does not.
-
-## Setup
+You need [Homebrew](https://brew.sh) and WoW installed. Then:
 
 ```bash
-scripts/bootstrap        # installs uv, the companion env, and the global `ramble` command
-ramble doctor            # WoW Forever: FOUND / Rambleon AddOn: INSTALLED / Archive: READY ...
-ramble install           # symlinks addon/Rambleon into the Forever AddOns folder
+brew install uv
+uv tool install "git+https://github.com/realworldbuilder/rambleon#subdirectory=companion"
+ramble setup
 ```
 
-## A night in Azeroth
+`ramble setup` finds your WoW folder, links the AddOn into it, starts a background watcher that survives reboots,
+and opens your (empty) journal. Start WoW, or log out to the character screen and back in so it sees the AddOn.
+That is the whole setup.
 
-```bash
-ramble watch             # leave running in a terminal while you play
-```
+For AI-written chapters, install [Claude Code](https://claude.com/claude-code) and log in once (`claude`, then
+`/login`). Without it you still get the timeline, the story page, and a prompt file you can paste into any assistant.
 
-In game: `/ramble` opens the log. Play. `/ramble note this cave is extremely cursed`. `/ramble mark`.
-When you are done, just log out. WoW writes the log to disk on logout (and on every `/reload`); the watcher prints
-`captured …`, waits ten minutes in case you come back, and then writes the night's chapter. Or, at any time:
+To remove it: `ramble uninstall` (your archive stays unless you ask for it to go).
 
-```bash
-ramble export tonight    # exports/markdown/2026-09-21-rambleon-birdsong.md (factual)
-ramble summarize tonight # exports/prompts/... and, with the Claude CLI installed, the journal chapter + recap
-```
+## Playing with it
 
-**A chapter is a night in Azeroth.** Every session you played that evening (reloads, relogs, a break for dinner) is
-stitched into one chapter. While `ramble watch` is running, finishing a night does all of this automatically: export,
-journal (if the Claude CLI is logged in), an HTML story page with your screenshots in `exports/html/`, and a
-`Chapters.lua` published into the AddOn. Next login, `/ramble chapters` shows the story with selectable text (Ctrl-A,
-Ctrl-C) for pasting anywhere. `/ramble save` flushes the log to disk right now if you cannot wait for logout.
+- `/ramble` opens the panel: time, place, level, quests, places, kills, loot, deaths, people, and the recent journey.
+- `/ramble note the cave is extremely cursed` — your own words are the best evidence the writer gets.
+- `/ramble mark` — remember this moment (there is a keybinding for it under AddOns).
+- `/ramble chapters` — read past chapters in game; click the text, Ctrl-A, Ctrl-C.
+- Log out when you are done. That is the save. A few seconds later the chapter is written on your Mac.
 
-Also: `ramble sessions`, `ramble show latest`, `ramble status`, `ramble page latest` (opens the story page),
-`ramble publish`, `ramble ingest` (one-shot capture if the watcher was not running), `ramble reprocess` (rebuild after upgrades).
+On the Mac: `ramble nights` lists chapters, `ramble page tonight` opens the story page, `ramble summarize tonight
+--voice field-journal` rewrites a chapter in another voice, `ramble doctor --fix` repairs a broken link or a stopped
+watcher. `ramble --help` has the rest.
 
-## In-game commands
+## What it records, and what it never records
 
-`/ramble` · `/ramble status` · `/ramble note <text>` · `/ramble mark` · `/ramble chapters` · `/ramble save` · `/ramble debug [on|off]` · `/ramble dump`
+Recorded: where you went, quests accepted and completed and their objectives, levels, experience, kills that gave
+experience (from the chat line), uncommon-or-better loot, deaths, who you grouped with and for how long, dungeons,
+achievements, screenshots (by time), your notes and marks, playtime.
 
-Keybindings: "Open Adventure Log" and "Mark Moment" under AddOns in the Key Bindings menu.
+Never: damage numbers or the combat log, chat content, other players beyond your group roster as the game shows it,
+anything Blizzard marks protected or secret. Nothing leaves your Mac. If you use the AI step, the only thing sent is
+the prompt for that chapter, through your own Claude login.
 
-## Principles
+Your history lives as plain JSON in `~/Rambleon/archive/` (or the checkout's `archive/`). Raw files WoW wrote are
+kept byte for byte and never edited. Stories are always generated downstream; the record is never touched to make
+a better story.
 
-Passive. Never plays the game for you, never touches combat or protected information, never needs the network.
-Records memories, not a combat log. AI interpretation is always downstream of the raw archive and never edits it.
+## Why the Mac side exists
+
+WoW only writes AddOn data on logout and reload, and the Forever beta currently does not restore it on the next
+launch. So the AddOn treats every login as a fresh session and the Mac watcher snapshots every write. WoW may
+forget; Rambleon does not.
 
 ## Development
 
 ```bash
-scripts/test             # luac -p, simulated session under a WoW API stub, pytest
+git clone https://github.com/realworldbuilder/rambleon && cd rambleon
+scripts/bootstrap        # uv, the companion env, `ramble` on PATH (editable)
+scripts/test             # luac -p, a simulated session under a WoW API stub, pytest
 ```
 
-See `CLAUDE.md` for the philosophy and the dev loop, `docs/` for environment facts, API notes, the data model and progress.
+`CLAUDE.md` explains the philosophy and the rules; `docs/` has the environment notes, the Forever API findings,
+the data model, a running progress log, and the roadmap.
+
+## Roadmap, briefly
+
+One-command setup (done), then chapter quality (rating loop, voices, a share card), then memory over time
+(character timeline, people you have played with, weekly recaps, an adventure map), then a small menu-bar app.
+See `docs/roadmap.md`.
+
+Ramble on.

@@ -12,7 +12,8 @@ FLAVOR_PREFERENCE = ["_classic_beta_", "_beta_", "_classic_", "_classic_era_", "
 
 
 def find_repo_root() -> Path:
-    """The Rambleon repository (holds addon/, archive/, exports/)."""
+    """Where Rambleon keeps its files: the source checkout when running from one, else ~/Rambleon.
+    (RAMBLEON_HOME overrides.) A non-developer install gets the AddOn from the package itself (see bundled_addon)."""
     env = os.environ.get("RAMBLEON_HOME")
     if env:
         return Path(env).expanduser()
@@ -21,6 +22,12 @@ def find_repo_root() -> Path:
         if (parent / "addon" / ADDON_NAME / f"{ADDON_NAME}.toc").exists():
             return parent
     return Path.home() / "Rambleon"
+
+
+def bundled_addon() -> Path | None:
+    """The AddOn shipped inside the Python package (for installs without the repository)."""
+    p = Path(__file__).resolve().parent / "addon" / ADDON_NAME
+    return p if (p / f"{ADDON_NAME}.toc").exists() else None
 
 
 def candidate_wow_dirs() -> list[Path]:
@@ -86,6 +93,7 @@ class Paths:
 
     @property
     def addon_src(self) -> Path:
+        """Where the live AddOn files are: the checkout, or ~/Rambleon/addon/Rambleon seeded from the package."""
         return self.repo_root / "addon" / ADDON_NAME
 
     @property

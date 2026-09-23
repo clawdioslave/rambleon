@@ -13,7 +13,7 @@ from rich.table import Table
 
 from . import __version__
 from .archive import Archive
-from .doctor import run_doctor
+from .doctor import apply_fixes, run_doctor
 from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
@@ -66,17 +66,81 @@ def version() -> None:
     console.print(f"ramble {__version__}")
 
 
-@app.command()
-def doctor() -> None:
-    """Check WoW, the AddOn, SavedVariables, the archive and the AI adapter."""
-    paths = resolve_paths()
-    checks = run_doctor(paths)
+def _print_checks(checks) -> None:
     width = max(len(c.label) for c in checks) + 1
     for c in checks:
-        color = "green" if c.ok else "red"
+        color = "green" if c.ok else ("yellow" if not c.essential else "red")
         console.print(f"{c.label + ':':<{width}} [{color}]{c.status}[/{color}]  [dim]{c.detail}[/dim]", highlight=False)
+
+
+@app.command()
+def doctor(fix: bool = typer.Option(False, "--fix", help="Repair what can be repaired (AddOn link, background service).")) -> None:
+    """Check WoW, the AddOn, SavedVariables, the archive, the watcher and the AI adapter."""
+    paths = resolve_paths()
+    checks = run_doctor(paths)
+    _print_checks(checks)
+    if fix:
+        actions = apply_fixes(paths, checks)
+        for a in actions:
+            console.print(f"[green]fixed[/green] {a}")
+        if actions:
+            _print_checks(run_doctor(paths))
     if any(not c.ok and c.essential for c in checks):
         raise typer.Exit(1)
+
+
+@app.command()
+def setup(no_ai: bool = typer.Option(False, "--no-ai", help="Do not use the Claude CLI for chapters.")) -> None:
+    """One command for a new Mac: link the AddOn, start the background watcher, build the journal index, open it."""
+    paths = resolve_paths()
+    archive = Archive(paths.archive_dir)
+    archive.ensure()
+    if paths.wow_dir is None:
+        console.print("[red]World of Warcraft was not found.[/red] Install WoW: Forever, or set RAMBLEON_WOW_DIR to its folder "
+                      "(the one that contains Interface/ and WTF/).")
+        raise typer.Exit(1)
+    console.print(f"WoW: {paths.wow_dir}")
+    try:
+        console.print(install_addon(paths))
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+    try:
+        console.print(svc.install(["--no-ai"] if no_ai else []))
+    except RuntimeError as e:
+        console.print(f"[yellow]background watcher not installed: {e}[/yellow] — you can run `ramble watch` in a terminal instead")
+    index = write_html_index(archive, paths.exports_dir)
+    console.print(f"journal: {index}")
+    checks = run_doctor(paths)
+    _print_checks(checks)
+    console.print()
+    console.print("Next: start WoW (or log out to the character screen and back in so it sees the AddOn), then play. "
+                  "Type /ramble in game. When you log out for the night, your chapter is written by itself.")
+    if any(c.label == "Claude CLI" and c.status != "FOUND" for c in checks):
+        console.print("For AI-written chapters, install Claude Code and log in: run `claude`, then `/login`. "
+                      "Without it you still get the timeline, the story page, and a prompt you can paste into any assistant.")
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(index)], check=False)
+
+
+@app.command()
+def uninstall(keep_archive: bool = typer.Option(True, "--keep-archive/--delete-archive",
+                                                help="The archive (your history) is kept unless you say otherwise.")) -> None:
+    """Remove the background service and the AddOn link. Your archive stays unless --delete-archive."""
+    paths = resolve_paths()
+    console.print(svc.uninstall())
+    dest = paths.addon_install
+    if dest and dest.is_symlink():
+        dest.unlink()
+        console.print(f"removed AddOn link {dest}")
+    elif dest and dest.is_dir():
+        console.print(f"AddOn copy left in place at {dest} (delete it yourself if you want it gone)")
+    if not keep_archive:
+        import shutil
+        shutil.rmtree(paths.archive_dir, ignore_errors=True)
+        console.print(f"deleted {paths.archive_dir}")
+    else:
+        console.print(f"archive kept at {paths.archive_dir}")
 
 
 @app.command()

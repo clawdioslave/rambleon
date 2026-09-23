@@ -59,3 +59,21 @@ def test_watch_loop_picks_up_a_write(tmp_path):
     watch(paths, archive, logs.append, interval=0.2, stop_after=3.0, rescan=0.5)
     assert len(archive.session_files()) == 2
     assert not archive.pid_path.exists()
+
+
+def test_install_without_checkout_seeds_from_bundle(tmp_path, monkeypatch):
+    from rambleon import install as inst
+    bundle = tmp_path / "pkg" / "addon" / "Rambleon"
+    bundle.mkdir(parents=True)
+    (bundle / "Rambleon.toc").write_text("## Version: 9.9.9\n")
+    (bundle / "Core.lua").write_text("-- core\n")
+    monkeypatch.setattr(inst, "bundled_addon", lambda: bundle)
+    wow = tmp_path / "wow"; (wow / "Interface" / "AddOns").mkdir(parents=True)
+    home = tmp_path / "home"
+    paths = Paths(repo_root=home, wow_dir=wow, archive_dir=home / "archive", exports_dir=home / "exports")
+    msg = inst.install_addon(paths)
+    assert "unpacked" in msg and (home / "addon" / "Rambleon" / "Core.lua").exists()
+    assert (wow / "Interface" / "AddOns" / "Rambleon").is_symlink()
+    (home / "addon" / "Rambleon" / "Chapters.lua").write_text("RambleonChapters = {}\n")
+    inst.install_addon(paths)  # same version: nothing re-copied, generated file untouched
+    assert (home / "addon" / "Rambleon" / "Chapters.lua").exists()

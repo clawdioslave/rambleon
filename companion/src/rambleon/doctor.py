@@ -20,6 +20,7 @@ class Check:
     detail: str
     ok: bool
     essential: bool = True
+    fix: str | None = None   # name of a repair `ramble doctor --fix` can apply
 
 
 def _toc_interface(paths: Paths) -> str | None:
@@ -60,7 +61,8 @@ def run_doctor(paths: Paths) -> list[Check]:
     ok = state in ("linked", "copied")
     label = {"linked": "INSTALLED (symlink)", "copied": "INSTALLED (copy)", "missing": "NOT INSTALLED",
              "broken": "BROKEN LINK", "foreign": "SOMETHING ELSE", "no-wow": "NO WOW"}[state]
-    checks.append(Check("Rambleon AddOn", label, f"{detail}; TOC Interface {toc or '?'}" if ok else detail + " — run `ramble install`", ok))
+    checks.append(Check("Rambleon AddOn", label, f"{detail}; TOC Interface {toc or '?'}" if ok else detail + " — run `ramble install`", ok,
+                        fix=None if ok else "install"))
 
     sv = paths.saved_variables_files()
     if sv:
@@ -88,13 +90,15 @@ def run_doctor(paths: Paths) -> list[Check]:
 
     pid = archive.watcher_pid()
     from . import service as svc
-    if pid:
-        how = "background service" if svc.is_loaded() else "terminal"
-        checks.append(Check("Watcher", "RUNNING", f"ramble watch (pid {pid}, {how})", True, essential=False))
+    if svc.is_loaded():
+        detail = f"background service (pid {pid})" if pid else "background service (starting)"
+        checks.append(Check("Watcher", "RUNNING", detail, True, essential=False))
+    elif pid:
+        checks.append(Check("Watcher", "RUNNING", f"ramble watch in a terminal (pid {pid})", True, essential=False))
     elif svc.PLIST.exists():
-        checks.append(Check("Watcher", "SERVICE STOPPED", "run `ramble service install` again", False, essential=False))
+        checks.append(Check("Watcher", "SERVICE STOPPED", "run `ramble service install` again", False, essential=False, fix="service"))
     else:
-        checks.append(Check("Watcher", "READY", "not running — `ramble service install` runs it in the background at login", True, essential=False))
+        checks.append(Check("Watcher", "NOT RUNNING", "`ramble service install` runs it in the background at login", False, essential=False, fix="service"))
 
     chars = _character_folders(paths)
     latest = archive.list_sessions()[-1] if archive.list_sessions() else None
@@ -111,7 +115,45 @@ def run_doctor(paths: Paths) -> list[Check]:
             v = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=10).stdout.strip()
         except (OSError, subprocess.TimeoutExpired):
             v = "version unknown"
-        checks.append(Check("Claude CLI", "FOUND", f"{claude} ({v})", True, essential=False))
+        logged_in = _claude_logged_in(claude)
+        if logged_in is False:
+            checks.append(Check("Claude CLI", "NOT LOGGED IN", f"{claude} ({v}) — run `claude`, then `/login`; chapters are prompt-only until then", True, essential=False))
+        else:
+            checks.append(Check("Claude CLI", "FOUND", f"{claude} ({v})", True, essential=False))
     else:
         checks.append(Check("Claude CLI", "NOT FOUND", "optional; `ramble summarize` will still write the prompt", True, essential=False))
     return checks
+
+
+def _claude_logged_in(claude: str) -> bool | None:
+    """True/False when we can tell, None when unsure. Costs one tiny request."""
+    try:
+        r = subprocess.run([claude, "-p", "--tools", "", "--output-format", "json", "--no-session-persistence",
+                            "--max-budget-usd", "0.01", "--model", "haiku"],
+                           input="Reply with the single word OK.", capture_output=True, text=True, timeout=45)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    out = (r.stdout or "") + (r.stderr or "")
+    if "Not logged in" in out or "401" in out or "revoked" in out or "authenticate" in out.lower():
+        return False
+    if r.returncode == 0:
+        return True
+    return None
+
+
+def apply_fixes(paths: Paths, checks: list[Check]) -> list[str]:
+    """Repair what `--fix` knows how to repair. Returns a line per action."""
+    from .install import install_addon
+    from . import service as svc
+    done: list[str] = []
+    for c in checks:
+        if c.ok or not c.fix:
+            continue
+        try:
+            if c.fix == "install":
+                done.append(install_addon(paths))
+            elif c.fix == "service":
+                done.append(svc.install())
+        except Exception as e:  # report, keep going
+            done.append(f"could not fix {c.label}: {e}")
+    return done

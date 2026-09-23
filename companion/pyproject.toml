@@ -1,6 +1,6 @@
 [project]
 name = "rambleon"
-version = "0.1.0"
+version = "0.2.0"
 description = "Rambleon Mac companion: archives World of Warcraft: Forever adventure sessions and turns them into journals."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,6 +25,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rambleon"]
+
+# Ship the AddOn inside the wheel so `uv tool install` from GitHub needs no checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"../addon/Rambleon/Rambleon.toc" = "rambleon/addon/Rambleon/Rambleon.toc"
+"../addon/Rambleon/Rambleon_Camelot.toc" = "rambleon/addon/Rambleon/Rambleon_Camelot.toc"
+"../addon/Rambleon/Forever.lua" = "rambleon/addon/Rambleon/Forever.lua"
+"../addon/Rambleon/Util.lua" = "rambleon/addon/Rambleon/Util.lua"
+"../addon/Rambleon/Core.lua" = "rambleon/addon/Rambleon/Core.lua"
+"../addon/Rambleon/Session.lua" = "rambleon/addon/Rambleon/Session.lua"
+"../addon/Rambleon/Journal.lua" = "rambleon/addon/Rambleon/Journal.lua"
+"../addon/Rambleon/Events.lua" = "rambleon/addon/Rambleon/Events.lua"
+"../addon/Rambleon/UI.lua" = "rambleon/addon/Rambleon/UI.lua"
+"../addon/Rambleon/Commands.lua" = "rambleon/addon/Rambleon/Commands.lua"
+"../addon/Rambleon/Bindings.xml" = "rambleon/addon/Rambleon/Bindings.xml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
