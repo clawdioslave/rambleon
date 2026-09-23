@@ -1,106 +1,87 @@
-# Rambleon — where it goes next
+# Rambleon — plan to offer it to other players
 
-Written 2026-09-21 after the first real night in Azeroth. This is a product plan, not a feature wishlist:
-each phase has a reason, a "done" test, and the risks that could sink it.
+Updated 2026-09-22 after two nights of real use. "Productize" here means: a stranger who plays WoW: Forever on a
+Mac can install it in one sitting, never think about it again, and get a chapter they want to paste somewhere.
+Free and open. Money, if ever, is a tip jar or a nicer Mac app later; never a gate on the data.
 
-## What we learned tonight
+## What two nights taught us
 
-- The loop works end to end on the Forever beta: AddOn → SavedVariables → watcher → archive → Markdown → chapter in game.
-- Players do not want to "end" anything. The log has to just run. Logging out is the save.
-- The first thing the player asked for after seeing the log was the stuff that was missing: kills, then loot.
-  The bar for "is this captured?" is the player's memory of the night, not an API list.
-- Waiting is the enemy. "I couldn't wait and it's not there" will be every user's first complaint.
-  Everything downstream of logout has to feel instant and obvious.
-- The AddOn alone is not the product. The Mac side (archive, journal, story page) is where the value shows up.
+- The loop works. Play → logout → chapter in game and on a page, unattended.
+- Players hate ceremony. No "end" button. The log runs; logout saves. (Done.)
+- The first questions are always "why isn't X in it?" — kills, then loot. The capture list is driven by the player's
+  memory of the night, not by API availability. Expect more of these: hearthstones, flight paths, rares, talents.
+- The AI chapter is the product. Voice matters more than expected, and the honesty rules need teeth: the model
+  will happily invent an NPC it knows from lore or guess a character's gender. Every named thing must trace to evidence.
+- "Is it there yet?" will be every user's first support question. Show state everywhere: publish time in game,
+  a notification on the Mac, the story page opening itself.
 
-## Product thesis
+## Decisions that are William's (not yet made)
 
-**Rambleon is a memory layer for World of Warcraft.** Strava for Azeroth. You play; it remembers; it hands you a
-story you actually want to reread and share. The moat is not data capture (any addon can log events); it is the
-archive over time and the quality of the retelling.
+1. **Name and identity.** "Rambleon" is the character's name. Fine as the product name? (I think yes: it sounds like
+   "ramble on", and the sign-off is already "Ramble on.")
+2. **Where it lives.** A public GitHub repo (`rambleon`) under your account, now or after Phase A?
+3. **License.** MIT (simplest, most permissive) vs. something with attribution requirements. Recommendation: MIT.
+4. **Platform scope for the first offer.** Mac only (what we can test) vs. promising Windows. Recommendation: Mac
+   first, say so plainly, keep the Python core portable.
+5. **AI stance.** Recommendation: prompt file always; Claude CLI if present; bring-your-own API key next; local
+   Ollama as the privacy option. Never a hosted service that sees other people's play data unless they opt in.
 
-Who it is for: people who play a few nights a week and like their character as a character. Not raiders
-optimising, not botters, not people who want a spreadsheet. The Substack/Discord/Bluesky sharer is the early adopter.
+## Phase A — Works for a stranger (target: two weeks)
 
-## Phase 1 — Make it dependable (next 1–2 weeks)
+Done when a friend with WoW Forever and a Mac installs it from the README and gets a chapter on night one with no
+help from us.
 
-Goal: a friend can install it and never think about it again.
+- [ ] **One-command setup.** `ramble setup`: doctor → install AddOn → install service → open the index page.
+      Detects a missing `claude` login and says exactly what to do.
+- [ ] **Install without the repo.** AddOn as a versioned zip (GitHub release, later CurseForge/Wago). Companion via
+      `uv tool install` from the GitHub URL, or a Homebrew tap. `RAMBLEON_HOME` defaults to `~/Rambleon` for non-dev installs.
+- [ ] **Self-healing.** `ramble doctor --fix`: recreate a deleted symlink (Battle.net updater), restart a stale
+      service, rebuild the index. The service restarts itself when the companion is upgraded.
+- [ ] **Multi-character, multi-flavor.** Already per-character on disk; make the CLI show and select characters, and
+      handle `_retail_`/`_classic_` folders if present (TOC work + a test pass).
+- [ ] **First-run in game.** A one-time welcome in the panel: what it records, what it never records, `/ramble note`.
+- [ ] **Capture gaps players will hit next.** Hearthstone bound/used, flight paths, rare/elite kills marked,
+      new spells/talents learned, dungeon boss kills. Each one small; each one behind the "six months later" test.
+- [ ] **Verify** loot events and screenshot pairing in game (still unconfirmed).
+- [ ] **README for humans**: screenshots of the panel, the chapters reader, a story page; a "what leaves my Mac"
+      section (nothing, unless you run the AI step, and then only the prompt).
+- [ ] **License file, CHANGELOG, version bump to 0.2.0**, a GitHub Actions job that runs `scripts/test` and builds the zip.
 
-- [x] Background watcher via launchd (`ramble service install`): no terminal, starts at login.
-- [x] Chapter written the moment you log out (WoW process / client log), with a macOS notification.
-- [ ] `ramble doctor` becomes `ramble setup`: one command that installs the AddOn, the service, and opens the first page.
-- [ ] Health: the watcher notices it is stale (the source changed underneath it) and restarts itself.
-- [ ] Guard against the Battle.net updater deleting the AddOn symlink (doctor already reports it; auto-repair it).
-- [ ] Cold-start verification of the SavedVariables bug on each new beta build; log which builds restore SV.
-- [ ] Error reporting: `/ramble debug` output goes into the session so the Mac side can see client-side warnings.
-- Done when: three consecutive nights produce a chapter with zero manual commands.
+## Phase B — Worth pasting unedited (target: the two weeks after)
 
-## Phase 2 — Make the chapter worth reading (2–4 weeks)
+- [ ] **Rating loop.** `ramble rate tonight 👍|👎 "note"` stored next to the journal sidecar; a `ramble review` that
+      shows chapters and ratings side by side so the rules can be tuned on evidence.
+- [ ] **Evidence density.** Quest text at accept time (`C_QuestLog.GetQuestInfo`), zone/subzone first-visit flags,
+      "first time in Darnassus" moments, time-of-day in the character's world.
+- [ ] **Voices.** Two or three good ones, chosen per night or per character. Keep `golden` and `field-journal`;
+      add a terse "captain's log". A `ramble voices try tonight` that renders all voices for comparison.
+- [ ] **Recap card.** A PNG share card (title, date, stats, one line) generated from the story page for socials.
+- [ ] **Screenshots on the timeline** in the story page, with the nearest event as caption (already wired; verify).
+- [ ] **Chapter continuity.** Give the writer the previous chapter's title and one-line summary so a season reads
+      as one story, without letting it re-narrate old nights.
 
-Goal: the AI chapter is good enough that the player pastes it somewhere without editing.
+## Phase C — Memory over time (a month out)
 
-- [ ] Journal quality loop: keep every prompt + output; add a `ramble rate` (👍/👎 + note) so we can tune the rules.
-- [ ] Chapter titles chosen from the night's events (already prompted); recap tuned to under 280 characters.
-- [ ] Voice profiles: "field journal", "captain's log", "dry", "earnest". One prompt file each.
-- [ ] Evidence density: the prompt gets zone descriptions and quest text pulled from the client's own data
-  (`C_QuestLog.GetQuestInfo`, quest log text captured at accept time) so the AI has more true material.
-- [ ] Screenshots on the timeline in game (a thumbnail is not possible; a marker + "1 screenshot here" is).
-- [ ] Multiple AI backends behind the same adapter: Claude CLI (today), Claude API key, Ollama for fully local.
-- Done when: the player shares a chapter unedited.
+- [ ] Character timeline page (level curve, nights, places, companions, deaths) from the index alone.
+- [ ] People page: first met, last seen, hours together, nights shared.
+- [ ] Weekly recap and season grouping (levels 1–10, 10–20 …).
+- [ ] Adventure map: `ZONE_ENTER` coordinates plotted on the client's own map images (no asset bundling).
+- [ ] `ramble ask "when did I first meet Tiamaat?"`: answers grounded in the archive.
 
-## Phase 3 — Memory over time (1–2 months)
+## Phase D — The Mac app (only if A–C hold up)
 
-Goal: answer "when did I first meet Moonhoof?" without a database.
+A small menu-bar app wrapping `ramble`: status dot, last chapter, open tonight's page, open the journal folder,
+voice picker. Signed and notarised .dmg. This is where a "buy me a coffee" could live. The CLI stays free and complete.
 
-- [ ] Character timeline page: every night, level curve, places, companions, deaths. A single HTML file.
-- [ ] People page: who you have played with, how long, first met, last seen. From the archive index only.
-- [ ] Weekly recap ("Week 3 in Azeroth") and season/arc grouping (levels 1–10, 10–20 …).
-- [ ] Adventure map: plot ZONE_ENTER coordinates on the zone map images the client already ships (no bundling).
-- [ ] Quest memory: "you did this quest on Sept 21 with Hazardelf".
-- [ ] `ramble ask "..."`: an AI answer grounded in the archive (index + relevant nights as evidence).
-- Done when: a 30-night archive answers the six questions in the original brief correctly.
+## Non-negotiables
 
-## Phase 4 — Productize (when Phase 1–2 hold up)
+- Passive. Never automates, never touches protected or secret values, never needs the network in game.
+- Plain files on the player's disk. Export everything and delete everything are each one command.
+- Other players appear only as the game shows them in your group. No chat content is stored.
+- Raw history is never edited to make a story better. AI is downstream, always.
 
-Two halves, distributed separately, because that is how WoW players expect it:
+## Next three things (in order)
 
-**AddOn** (CurseForge / Wago / WoWUp):
-- Ship `Rambleon` as a normal addon. Zero config. Works on Forever first; Retail and Classic are TOC work plus a
-  test pass, since the code is already retail-12.x style.
-- Without the companion it still gives the player the in-game log, notes, marks and the SavedVariables file.
-
-**Companion** (Mac first):
-- A small **menu-bar app** (SwiftUI or a Python + rumps shim to start) that wraps `ramble`: status dot, "last chapter",
-  "open tonight's story", "open journal folder". No terminal. Signed and notarised.
-- Later Windows: the same Python core with a tray icon; the WTF layout is identical.
-- Distribution: Homebrew tap for the CLI now; a notarised .dmg for the app; a GitHub release per version.
-
-**AI**:
-- Default free path: paste the prompt anywhere (works today).
-- Bring-your-own key (Claude/OpenAI-compatible) as an option; local Ollama as the privacy option.
-- If it is ever hosted: the *only* thing that leaves the Mac is the prompt file, opt-in, per chapter.
-
-**Privacy and rules** (the reason people will trust it):
-- Passive only; never automates; never reads protected/secret values; never needs the network in game.
-- The archive is plain JSON on the player's disk. Export everything, delete everything, one command each.
-- Other players' names appear only as the game shows them (group roster). No chat content is stored.
-
-**Business shape (not selling, but sustainable):**
-- Free AddOn + free CLI, MIT. The menu-bar app is where a small one-time price or a "buy the author a coffee"
-  could sit if it ever makes sense. No accounts, no subscription, no cloud unless the player asks for hosted AI.
-
-## Risks
-
-- **Forever beta churn.** Builds change weekly; the SavedVariables bug may vanish or mutate. The Mac archive design
-  already survives either outcome; keep `docs/addon-api.md` current and re-verify on each build.
-- **Blizzard addon policy.** Everything here is the normal UI API. The one thing to keep watching is Secret Values
-  widening to zone/quest data; if that happens the journal degrades to notes + marks, which still works.
-- **Symlink deletion by the updater.** Known Blizzard issue; `ramble install --copy` is the fallback.
-- **AI cost/quality.** Keep the prompt-file path first-class so the product never depends on a paid API.
-- **Scope creep.** The test for every feature stays: "will this help the player remember their adventure?"
-
-## Next three things to build
-
-1. `ramble setup` (AddOn + service + first page) so a new user needs one command.
-2. Journal quality loop: rate chapters, tune the rules, add voice profiles.
-3. The character timeline page.
+1. `ramble setup` + `doctor --fix` + install-without-the-repo (Phase A core).
+2. Verify loot and screenshots in game; add hearthstone/flight path/rare capture.
+3. README with pictures, license, first GitHub release.
