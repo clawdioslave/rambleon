@@ -114,7 +114,7 @@ def session_with_shots(tmp_path):
     return s
 
 
-def test_story_page_places_pictures_on_the_timeline(tmp_path, monkeypatch):
+def test_story_page_shows_pictures_in_a_gallery_without_a_timeline(tmp_path, monkeypatch):
     monkeypatch.setattr(pub, "RESIZER", None)
     s = session_with_shots(tmp_path)
     archive = Archive(tmp_path / "archive")
@@ -123,10 +123,10 @@ def test_story_page_places_pictures_on_the_timeline(tmp_path, monkeypatch):
     page = export_html(s, archive, tmp_path / "exports")
     text = page.read_text()
     assert "<figure class='hero'>" in text and "Marked moment in Dolanaar" in text
-    assert text.count("<li class='shot'>") == 4               # five pictures: one hero, four on the timeline
     assert f"<figure class='hero'><img src='{page.stem}/{page.stem}-02.png' alt='Reached Level 11 in Dolanaar'" in text
-    zone_shot = f"<li class='shot'><figure><img src='{page.stem}/{page.stem}-01.png' alt='Entered Darkshore'"
-    assert text.index("Entered Auberdine (Darkshore)") < text.index(zone_shot) < text.index("Reached Level 11</li>")
+    assert "<h2>Pictures</h2><div class='gallery'>" in text and text.count("<figure>") == 4   # five pictures: one hero, four in the gallery
+    assert "The Journey" not in text and "<li>" not in text          # the chapter is the journey: no event timeline
+    assert " AM — " not in text and " PM — " not in text and "Deaths" not in text and "in Azeroth" not in text
     assert "Screenshots</h2>" not in text and "Took a screenshot" not in text
     assert str(tmp_path) not in text and "WoWScrnShot_" not in text
     assert sorted(p.name for p in page.with_suffix("").iterdir()) == [f"{page.stem}-0{n}.png" for n in range(1, 6)]
