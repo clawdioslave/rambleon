@@ -22,6 +22,8 @@ from .nights import nights as list_nights, resolve_night
 from .notify import notify
 from .publish import export_html, publish_chapters, write_html_index
 from .screenshots import refresh_session_screenshots
+from .config import share_auto
+from .share import ShareError, share as run_share
 from .watch import Finalizer
 from .wowstate import logged_out_since
 from .summarize import DEFAULT_MODEL, DEFAULT_VOICE, available_voices, summarize as run_summarize
@@ -172,9 +174,19 @@ def _finish_night(archive: Archive, paths, use_ai: bool, model: str, voice: str 
         write_html_index(archive, paths.exports_dir)
         _, n = publish_chapters(archive, paths)
         log(f"published {n} chapter(s) to the game — they show under /ramble chapters after the next login or /reload")
+        shared = ""
+        if share_auto(paths.repo_root):   # this Mac opted in via rambleon.local.toml: the page goes to GitHub Pages
+            try:
+                result = run_share(archive, paths, [night["id"]], yes=True, log=log)
+                log(f"share: {result.message}")
+                for url in result.urls:
+                    log(url)
+                shared = " Shared." if result.pushed else ""
+            except ShareError as e:
+                log(f"share failed (the chapter is safe on this Mac): {e}")
         c = night.get("counters", {})
         notify("Rambleon", f"{night['character'].get('displayName')}: {duration(night.get('playedSeconds'))} in Azeroth, "
-                           f"{c.get('questsCompleted', 0)} quests, {c.get('kills', 0)} kills. Chapter written.")
+                           f"{c.get('questsCompleted', 0)} quests, {c.get('kills', 0)} kills. Chapter written.{shared}")
     return run
 
 
@@ -283,7 +295,6 @@ def share(refs: list[str] = typer.Argument(None, help="tonight | latest | YYYY-M
           dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be copied and run; change nothing.")) -> None:
     """Put a night's story page (with its pictures) on your public GitHub Pages site. Manual on purpose:
     this is the moment the chapter leaves your Mac."""
-    from .share import ShareError, share as run_share
     archive, paths = _archive()
     try:
         result = run_share(archive, paths, list(refs or []), all_nights=all_nights, yes=yes, dry_run=dry_run, log=log,

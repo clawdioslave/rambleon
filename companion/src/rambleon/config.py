@@ -24,3 +24,10 @@ def load_local_config(repo_root: Path | None = None) -> dict[str, Any]:
 def character_overrides(slug: str, repo_root: Path | None = None) -> dict[str, Any]:
     chars = load_local_config(repo_root).get("characters", {})
     return chars.get(slug, {}) if isinstance(chars, dict) else {}
+
+
+def share_auto(repo_root: Path | None = None) -> bool:
+    """`[share] auto = true`: push every finished chapter to GitHub Pages without asking. Off unless this
+    machine's rambleon.local.toml says so; the file is gitignored, so it never travels with the repo."""
+    share = load_local_config(repo_root).get("share", {})
+    return bool(share.get("auto")) if isinstance(share, dict) else False

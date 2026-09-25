@@ -37,8 +37,9 @@ WoW: Forever → Rambleon AddOn (Lua) → SavedVariables (written on logout and 
 - **Pictures**: the AddOn calls `Screenshot()` at level ups, `/ramble mark` and the first visit to a new zone (UI visible,
   `/ramble shots on|off`). The `SCREENSHOT` event carries the reason; the companion pairs the file, captions it, copies it
   into `archive/screenshots/`, and the story page shows a hero picture plus the rest on the timeline.
-- **Sharing is manual**: `ramble share tonight` copies the page and web-sized pictures into `site/example`, commits and
-  pushes after asking. Nothing else publishes.
+- **Sharing is manual by default**: `ramble share tonight` copies the page and web-sized pictures into `site/example`,
+  commits and pushes after asking. A Mac can opt in to automatic sharing with `[share] auto = true` in the gitignored
+  `rambleon.local.toml`: then every finished chapter is pushed by the watcher. Nothing else publishes.
 - **A chapter is a night**: every session of one evening (5 a.m. cutoff) stitched together in `nights.py`.
   Reloads and relogs are continuity, not breaks (the AddOn resumes a session seen < 10 min ago).
 - **Finalization**: the watcher writes the chapter the moment the player leaves (WoW quit, or `Logs/Client.log`

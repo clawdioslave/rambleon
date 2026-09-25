@@ -159,6 +159,9 @@ On the Mac after logout: `ls "<WoW>/_classic_beta_/Screenshots/"` (note the exte
   `night-2026-09-24-rambleon-birdsong` and renumbered to Chapter 4 (text kept), stale `2026-09-24-rambleon*` exports
   removed, `export`/`page`/`publish` rerun, watcher restarted. `Chapters.lua`: 4 chapters, one slug, GUID on each.
 - Note: finalization reruns the AI journal for the night, so tonight's text is rewritten again when the player logs out.
+- Later that night: `[share] auto = true` (local toml) → the finalizer calls `share` with `yes=True` after publishing;
+  this Mac opted in. A bare-environment `git push --dry-run` with the launchd PATH succeeded (osxkeychain), so the
+  service can push. `docs/invite-prompt.md` written for a friend.
 - To verify in game: `/reload` → `/ramble chapters` shows "4 of 4"; `/ramble debug` shows displayName Rambleon Birdsong.
 
 ### Later

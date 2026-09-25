@@ -70,6 +70,18 @@ On the Mac: `ramble nights` lists chapters, `ramble page tonight` opens the stor
 your GitHub Pages site after asking, `ramble doctor --fix` repairs a broken link or a stopped watcher. `ramble --help`
 has the rest.
 
+Want every chapter on your site the moment it is written, no questions asked? Put this in `rambleon.local.toml`
+next to your checkout (the file is gitignored, so it only affects that Mac) and restart the watcher with
+`ramble service install`:
+
+```toml
+[share]
+auto = true
+```
+
+Inviting a friend? Send them [docs/invite-prompt.md](docs/invite-prompt.md): a message they can paste into Claude Code
+and it installs Rambleon for them.
+
 ## What it records, and what it never records
 
 Recorded: where you went, quests accepted and completed and their objectives, levels, experience, kills that gave

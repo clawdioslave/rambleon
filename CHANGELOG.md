@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `[share] auto = true` in `rambleon.local.toml` makes the watcher push every finished chapter to GitHub Pages
+  (off by default; the file is gitignored, so it is a per-Mac choice). `docs/invite-prompt.md`: a paste-ready
+  message that installs Rambleon for a friend through Claude Code.
 - Forever build 70009 changed the name API (`UnitName` → first name, surname in `UnitFullName`'s second return), which
   hid every earlier chapter in `/ramble chapters` and started the companion on a "new" character. The AddOn and the
   companion now derive one display name from the raw fields, `Chapters.lua` carries the character GUID and the game

@@ -83,3 +83,29 @@ def test_pages_url():
     assert pages_url("git@github.com:me/rambleon.git", "x.html") == "https://me.github.io/rambleon/example/x.html"
     assert pages_url("https://github.com/me/rambleon", "") == "https://me.github.io/rambleon/example/"
     assert pages_url("https://example.org/foo.git", "x") is None
+
+
+def test_share_auto_is_off_unless_this_machine_says_so(tmp_path):
+    from rambleon.config import share_auto
+    assert share_auto(tmp_path) is False
+    (tmp_path / "rambleon.local.toml").write_text("[share]\nauto = true\n")
+    assert share_auto(tmp_path) is True
+    (tmp_path / "rambleon.local.toml").write_text("[share]\nauto = false\n")
+    assert share_auto(tmp_path) is False
+
+
+def test_finished_night_is_shared_when_auto_is_on(tmp_path, monkeypatch):
+    from rambleon import cli
+    repo = checkout(tmp_path)
+    archive, paths = archived(tmp_path, repo)
+    (repo / "addon" / "Rambleon").mkdir(parents=True)
+    calls: list = []
+    monkeypatch.setattr(cli, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "run_share", lambda archive_, paths_, refs, **kw: calls.append((refs, kw)) or type(
+        "R", (), {"message": "pushed", "urls": ["https://x/y.html"], "pushed": True})())
+    session = archive.load_session("latest")
+    cli._finish_night(archive, paths, use_ai=False, model="sonnet")(session)
+    assert calls == []                                       # no toml: nothing leaves the Mac
+    (repo / "rambleon.local.toml").write_text("[share]\nauto = true\n")
+    cli._finish_night(archive, paths, use_ai=False, model="sonnet")(session)
+    assert len(calls) == 1 and calls[0][0][0].startswith("night-") and calls[0][1]["yes"] is True
