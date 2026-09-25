@@ -233,31 +233,10 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
              ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)),
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
-    # Pictures sit on the timeline at their moment; the hero is not repeated.
-    by_event: dict[int, list[dict[str, Any]]] = {}
-    loose: list[dict[str, Any]] = []
-    for img in images:
-        if img is hero:
-            continue
-        if img.get("eventIndex") is None:
-            loose.append(img)
-        else:
-            by_event.setdefault(img["eventIndex"], []).append(img)
-    pictured = {i for i in by_event} | ({hero["eventIndex"]} if hero and hero.get("eventIndex") is not None else set())
-    parts.append("<h2>The Journey</h2><ul>")
-    for i, ev in enumerate(session.get("events", [])):
-        if ev.get("type") == "RESUMED":
-            continue
-        if not (ev.get("type") == "SCREENSHOT" and i in pictured):   # the picture itself stands for the event
-            parts.append(f"<li>{html.escape(describe(ev))}</li>")  # no clock times on the public page
-        for img in by_event.get(i, []):
-            parts.append("<li class='shot'>" + _figure(img) + "</li>")
-    for img in loose:
-        parts.append("<li class='shot'>" + _figure(img) + "</li>")
-    parts.append("</ul>")
-    notes = [ev for ev in session.get("events", []) if ev.get("type") == "NOTE"]
-    if notes:
-        parts.append("<h2>Notes</h2><ul>" + "".join(f"<li>{html.escape(str(ev.get('text')))}</li>" for ev in notes) + "</ul>")
+    # The chapter itself is the journey: no event timeline on the public page. The remaining pictures follow it.
+    gallery = [img for img in images if img is not hero]
+    if gallery:
+        parts.append("<h2>Pictures</h2><div class='gallery'>" + "".join(_figure(img) for img in gallery) + "</div>")
     parts.append(f"<footer>Recorded by Rambleon · session {html.escape(session.get('id', ''))}</footer></body></html>")
     return "\n".join(parts)
 
