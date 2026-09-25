@@ -220,7 +220,7 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
     parts = [f"<!doctype html><html><head><meta charset='utf-8'><title>{html.escape(title)} — {html.escape(name)}</title>",
              f"{FONTS}<style>{CSS}</style></head><body>",
              f"<h1>{html.escape(title)}</h1>",
-             f"<div class='meta'>{html.escape(name)} · {html.escape(long_date(session.get('startedAt')))} · {html.escape(duration(session.get('playedSeconds')))} in Azeroth</div>"]
+             f"<div class='meta'>{html.escape(name)} · {html.escape(long_date(session.get('startedAt')))}</div>"]
     images = prepare_images(session, image_dir)
     hero = pick_hero(images)
     if hero:
@@ -230,7 +230,7 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
     recap = (journal or {}).get("recap") or render_recap(session)
     parts.append("<div class='recap'>" + html.escape(recap.strip()) + "</div>")
     stats = [("Quests", cnt.get("questsCompleted", 0)), ("Places", len(session.get("zones", []))),
-             ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)), ("Deaths", cnt.get("deaths", 0)),
+             ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)),
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
     # Pictures sit on the timeline at their moment; the hero is not repeated.
@@ -249,7 +249,7 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
         if ev.get("type") == "RESUMED":
             continue
         if not (ev.get("type") == "SCREENSHOT" and i in pictured):   # the picture itself stands for the event
-            parts.append(f"<li>{html.escape(clock(ev.get('t')))} — {html.escape(describe(ev))}</li>")
+            parts.append(f"<li>{html.escape(describe(ev))}</li>")  # no clock times on the public page
         for img in by_event.get(i, []):
             parts.append("<li class='shot'>" + _figure(img) + "</li>")
     for img in loose:

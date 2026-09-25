@@ -172,14 +172,12 @@ def render_recap(session: dict[str, Any]) -> str:
     """The short shareable recap, from the numbers alone. The AI version replaces it when available."""
     cnt = session.get("counters", {})
     people = session.get("people", [])
-    lines = [f"{duration(session.get('playedSeconds'))} in Azeroth tonight."]
     levels = cnt.get("levelsGained", 0)
-    lines.append(f"{levels} level{'s' if levels != 1 else ''}.")
+    lines = [f"{levels} level{'s' if levels != 1 else ''} tonight."]  # no playtime, no deaths: the recap is public
     lines.append(f"{cnt.get('questsCompleted', 0)} quests.")
     lines.append(f"{len(session.get('zones', []))} places.")
     if cnt.get("kills"):
         lines.append(f"{cnt['kills']} enemies slain.")
-    lines.append(f"{cnt.get('deaths', 0)} deaths.")
     if len(people) == 1:
         lines.append(f"Travelled with {people[0].get('name')}.")
     elif people:

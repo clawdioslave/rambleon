@@ -66,7 +66,7 @@ def test_recap_wording():
     db = to_python(parse((FIXTURES / "Rambleon_simulated.lua").read_bytes()))["RambleonDB"]
     s = sessions_from_db(db)[0]
     recap = render_recap(s)
-    assert recap.startswith("6m in Azeroth tonight.") and recap.rstrip().endswith("Ramble on.")
+    assert "in Azeroth" not in recap and "deaths" not in recap and recap.rstrip().endswith("Ramble on.")
 
 
 def test_voices():

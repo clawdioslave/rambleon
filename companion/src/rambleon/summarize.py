@@ -195,7 +195,7 @@ def summarize(session: dict[str, Any], archive: Archive, exports_dir: Path, use_
         "createdAt": int(__import__("time").time()),
     })
     journal_path = exports_dir / "markdown" / export_filename(session, "-journal")
-    header = f"_{session.get('character', {}).get('displayName')} · {long_date(session.get('startedAt'))} · {duration(session.get('playedSeconds'))} in Azeroth_\n\n"
+    header = f"_{session.get('character', {}).get('displayName')} · {long_date(session.get('startedAt'))}_\n\n"
     atomic_write_bytes(journal_path, (journal.rstrip() + "\n\n" + header).encode("utf-8"))
     result["journal"] = journal_path
     if recap:
