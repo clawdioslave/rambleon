@@ -110,11 +110,9 @@ def build_prompt(session: dict[str, Any], chapter: int, voice: str | None = None
     else:
         lines.append("- none")
     lines += ["", "## Recap numbers to use verbatim", "",
-              f"- duration: {duration(session.get('playedSeconds'))}",
               f"- levels: {cnt.get('levelsGained', 0)}",
               f"- quests: {cnt.get('questsCompleted', 0)}",
               f"- places: {len(session.get('zones', []))}",
-              f"- deaths: {cnt.get('deaths', 0)}",
               f"- enemies slain: {cnt.get('kills', 0)}",
               f"- people: {len(people)}", ""]
     return "\n".join(lines)

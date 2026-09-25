@@ -26,10 +26,8 @@ Output format, exactly:
 {the journal entry, one to four short paragraphs}
 
 ---RECAP---
-{duration} in Azeroth tonight.
-{levels} level(s).
+{levels} level(s) tonight.
 {quests} quests.
 {places} new places.
-{deaths} deaths.
 {one short line about people met, or "Travelled alone." if none}
 Ramble on.
