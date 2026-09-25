@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-- Example journal on GitHub Pages (`site/`, refreshed with `scripts/publish-example`).
+- Forever build 70009 changed the name API (`UnitName` → first name, surname in `UnitFullName`'s second return), which
+  hid every earlier chapter in `/ramble chapters` and started the companion on a "new" character. The AddOn and the
+  companion now derive one display name from the raw fields, `Chapters.lua` carries the character GUID and the game
+  matches chapters by it. `ramble reprocess` repairs sessions recorded on the new build.
+
+## 0.3.0 — 2026-09-22
+
+- Automatic screenshots at level ups, `/ramble mark` and the first visit to a new zone each night (`/ramble shots on|off`).
+  The UI stays visible. Unverified on Forever until the next session; `/ramble debug` reports whether `Screenshot()` worked.
+- Screenshots are captioned by the moment they were taken ("Reached Level 9 in Dolanaar") and copied into the archive
+  by default; pictures taken after the last save are paired when the chapter is written.
+- Story page: a hero picture, the rest inline on the timeline; thumbnails on the index; web-sized JPEG copies.
+- The journal prompt lists when pictures were taken (never what they show).
+- `ramble share [tonight|date|--all]`: copy a night's page and pictures into `site/example`, commit and push to GitHub Pages
+  after a confirmation. `scripts/publish-example` now wraps it.
+- Example journal on GitHub Pages (`site/`).
 
 ## 0.2.0 — 2026-09-22
 

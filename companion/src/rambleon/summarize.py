@@ -12,6 +12,7 @@ from typing import Any
 from .archive import Archive, atomic_write_bytes, atomic_write_json
 from .config import character_overrides
 from .export import clock, describe, duration, export_filename, long_date, render_recap
+from .screenshots import caption
 
 RULES_PATH = Path(__file__).parent / "prompts" / "journal.md"
 VOICES_DIR = Path(__file__).parent / "prompts" / "voices"
@@ -101,11 +102,11 @@ def build_prompt(session: dict[str, Any], chapter: int, voice: str | None = None
             lines.append(f"- {clock(ev.get('t'))} in {ev.get('subzone') or ev.get('zone') or 'unknown place'}: \"{ev.get('text')}\"")
     else:
         lines.append("- none")
-    lines += ["", "## Screenshots", ""]
+    lines += ["", "## Screenshots (you cannot see them; only the moment they were taken is known)", ""]
     shots = session.get("screenshots", [])
     if shots:
         for s in shots:
-            lines.append(f"- {clock(s.get('takenAt'))}: {s.get('archived') or s.get('path')}")
+            lines.append(f"- screenshot taken when: {caption(s, session.get('events', []))} at {clock(s.get('takenAt'))}")
     else:
         lines.append("- none")
     lines += ["", "## Recap numbers to use verbatim", "",

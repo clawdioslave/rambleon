@@ -194,6 +194,15 @@ function UI.Toggle()
   if p:IsShown() then p:Hide() else p:Show() end
 end
 
+-- Our own frames stay out of the pictures. Returns a function that shows them again.
+function UI.HideForScreenshot()
+  local hidden = {}
+  for _, f in ipairs({ panel, chaptersFrame }) do
+    if f and f:IsShown() then f:Hide(); table.insert(hidden, f) end
+  end
+  return function() for _, f in ipairs(hidden) do f:Show() end end
+end
+
 function UI.Flash(text, seconds)
   local p = UI.Get()
   p.banner:SetText(text)
@@ -217,10 +226,19 @@ local CH_WIDTH, CH_HEIGHT = 560, 600
 local function myChapters()
   local all = _G.RambleonChapters
   if type(all) ~= "table" then return {} end
+  -- Identity is the GUID: the Forever client has changed how it spells the player's name between builds.
+  -- The slug stays as a fallback for chapters published before the GUID was included.
   local me = ns.Slug(ns.DisplayName())
+  local guid = (ns.session and ns.session.character and ns.session.character.guid)
+    or ns.CleanString(ns.SafeCall(UnitGUID, "player"))
   local out = {}
   for _, c in ipairs(all) do
-    if type(c) == "table" and (c.slug == me or c.slug == nil) then table.insert(out, c) end
+    if type(c) == "table" then
+      local mine
+      if guid and c.guid and c.guid ~= "" then mine = (c.guid == guid)
+      else mine = (c.slug == me or c.slug == nil) end
+      if mine then table.insert(out, c) end
+    end
   end
   table.sort(out, function(a, b) return (a.startedAt or 0) < (b.startedAt or 0) end)
   return out

@@ -25,7 +25,12 @@ function J.DescribeEvent(ev)
   elseif t == "INSTANCE_ENTER" then return "Entered " .. tostring(ev.name or "an instance")
   elseif t == "INSTANCE_EXIT" then return "Left " .. tostring(ev.name or "the instance")
   elseif t == "ACHIEVEMENT" then return "Achievement: " .. tostring(ev.name)
-  elseif t == "SCREENSHOT" then return "Took a screenshot"
+  elseif t == "SCREENSHOT" then
+    if ev.reason == "LEVEL_UP" then return "Screenshot (Level " .. tostring(ev.level) .. ")"
+    elseif ev.reason == "MARK" then return "Screenshot (marked moment)"
+    elseif ev.reason == "ZONE_ENTER" then return "Screenshot (entering " .. tostring(ev.zone) .. ")"
+    end
+    return "Took a screenshot"
   elseif t == "NOTE" then return '"' .. tostring(ev.text) .. '"'
   elseif t == "FIRST_KILL" then return "First " .. tostring(ev.name) .. " slain"
   elseif t == "LOOT" then return "Looted " .. tostring(ev.name) .. (ev.qualityName and (" (" .. ev.qualityName .. ")") or "")

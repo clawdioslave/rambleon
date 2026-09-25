@@ -37,10 +37,21 @@ Researched 2026-09-21. Sources are listed at the end. Anything marked *verify in
 
 ## Names and realms
 
-Forever has surnames and no realms. Reports: `UnitFullName("player")` → `"Rambleon Birdsong", "Classic Beta PvE"`;
-`GetNormalizedRealmName()` may be nil or empty. The WTF folder is `70/Rambleon-Birdsong`. Rambleon stores the raw
-results of `UnitName`, `UnitFullName`, `GetRealmName` and `GetNormalizedRealmName` and never splits on `-`.
-*Verify in-game what each returns.*
+Forever has surnames and no realms, and **the client changed how it reports them** (verified in game):
+
+| build | `UnitName("player")` | `UnitFullName("player")` | `GetRealmName()` | `GetNormalizedRealmName()` |
+|---|---|---|---|---|
+| 69913, 69977 (to 2026-09-23) | `"Rambleon Birdsong"` | `"Rambleon Birdsong", "ClassicBetaPvE"` | `"Classic Beta PvE"` | `"ClassicBetaPvE"` |
+| 70009 (from 2026-09-24) | `"Rambleon"` | `"Rambleon", "Birdsong"` | `"Classic Beta PvE"` | `"ClassicBetaPvE"` |
+
+`UnitGUID("player")` (`Player-4618-00BCBDC7`) stayed the same, so it is the identity. The WTF folder is still
+`70/Rambleon-Birdsong`. Rambleon stores the raw results of `UnitName`, `UnitFullName`, `GetRealmName` and
+`GetNormalizedRealmName` unchanged and never splits on `-`. On top of them it derives `character.surname` and
+`character.displayName` with one rule, in `ns.CaptureCharacter` (AddOn) and `normalize.display_name` (companion):
+the second return of `UnitFullName` is a surname when it is non-empty, is not the realm in any spelling, and the
+name has no space already; the display name is the name plus that surname. Every shape above yields
+`"Rambleon Birdsong"`; mainline's `"Name", "Realm"` yields `"Name"`. `Chapters.lua` carries the GUID and the AddOn
+matches chapters by it (slug only as a fallback for old files). Group members are now first-name only.
 
 ## Events Rambleon uses
 
@@ -58,9 +69,20 @@ results of `UnitName`, `UnitFullName`, `GetRealmName` and `GetNormalizedRealmNam
 | `GROUP_ROSTER_UPDATE` | `GROUP_JOIN` / `GROUP_LEAVE`, people table | roster diff, names guarded against secret values, time together accumulated on heartbeat |
 | `UPDATE_INSTANCE_INFO` | `INSTANCE_ENTER` / `INSTANCE_EXIT` | via `IsInInstance()` transitions |
 | `ACHIEVEMENT_EARNED` | `ACHIEVEMENT` | pcall-registered; may not exist |
-| `SCREENSHOT_SUCCEEDED` | `SCREENSHOT` | no payload; the companion pairs the file by time |
+| `SCREENSHOT_SUCCEEDED` | `SCREENSHOT {reason, auto, level, zone, subzone}` | no payload; the companion pairs the file by time. `reason` is `LEVEL_UP`, `MARK`, `ZONE_ENTER` when the AddOn took the picture (`auto = true`), else `MANUAL` |
+| `SCREENSHOT_FAILED` | — | clears the pending reason; `/ramble debug` shows `last: failed` |
 
-Deliberately not recorded in v0.1: XP ticks, loot, bag/equipment changes, chat, anything from combat.
+Deliberately not recorded: chat content, anything from the combat log, protected or secret values.
+
+### Automatic screenshots (0.3.0, unverified on Forever as of 2026-09-22)
+
+The AddOn calls the global `Screenshot()` (retail API; other addons use it for level-up shots) from `ns.TakeScreenshot`
+in `Session.lua`: one second after `PLAYER_LEVEL_UP` (the glow), 0.2 s after `/ramble mark`, and one second after the
+`ZONE_ENTER` for the first visit to a new main zone tonight. Guards: `type(Screenshot) == "function"`, `pcall`, a 3 s
+rate limit, `RambleonDB.settings.autoScreenshots` (`/ramble shots on|off`). The reason is parked in `ns.pendingShot`
+and consumed by `SCREENSHOT_SUCCEEDED` (15 s TTL), so a manual screenshot in between would inherit it (rare, accepted).
+The UI is never hidden. Files land in `<WoW>/Screenshots/WoWScrnShot_MMDDYY_HHMMSS.<jpg|tga|png>` per the
+`screenshotFormat` CVar; the companion converts to JPEG for the web (sips) and can only *display* jpg/png.
 
 ## SavedVariables mechanics and the Forever beta bug
 

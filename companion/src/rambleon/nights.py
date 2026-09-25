@@ -8,6 +8,7 @@ from typing import Any
 
 from .archive import Archive, load_json
 from .model import COUNTER_KEYS, SUSPEND_TIMEOUT
+from .screenshots import pair_screenshots
 
 CUTOFF_HOUR = 5  # play that runs past midnight still belongs to the evening it started
 
@@ -89,14 +90,9 @@ def build_night(sessions: list[dict[str, Any]], now: float | None = None) -> dic
     for z in night["zones"]:
         z.pop("_k", None)
     night["events"].sort(key=lambda e: e.get("t") or 0)
-    # screenshot → nearest event again, over the merged timeline
-    for sh in night["screenshots"]:
-        best, idx = None, None
-        for i, ev in enumerate(night["events"]):
-            d = abs((ev.get("t") or 0) - (sh.get("takenAt") or 0))
-            if best is None or d < best:
-                best, idx = d, i
-        sh["nearestEventIndex"], sh["nearestEventSeconds"] = idx, best
+    # screenshot → its event again, over the merged timeline
+    night["screenshots"] = [dict(sh) for sh in night["screenshots"]]
+    pair_screenshots(night["screenshots"], night["events"])
     night["counters"]["zonesVisited"] = len(night["zones"])
     return night
 

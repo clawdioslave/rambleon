@@ -34,6 +34,11 @@ WoW: Forever → Rambleon AddOn (Lua) → SavedVariables (written on logout and 
 ```
 
 - **The log just runs.** There is no "end" button. Logging out is the save. `/ramble save` is an optional flush.
+- **Pictures**: the AddOn calls `Screenshot()` at level ups, `/ramble mark` and the first visit to a new zone (UI visible,
+  `/ramble shots on|off`). The `SCREENSHOT` event carries the reason; the companion pairs the file, captions it, copies it
+  into `archive/screenshots/`, and the story page shows a hero picture plus the rest on the timeline.
+- **Sharing is manual**: `ramble share tonight` copies the page and web-sized pictures into `site/example`, commits and
+  pushes after asking. Nothing else publishes.
 - **A chapter is a night**: every session of one evening (5 a.m. cutoff) stitched together in `nights.py`.
   Reloads and relogs are continuity, not breaks (the AddOn resumes a session seen < 10 min ago).
 - **Finalization**: the watcher writes the chapter the moment the player leaves (WoW quit, or `Logs/Client.log`
@@ -52,27 +57,30 @@ WoW: Forever → Rambleon AddOn (Lua) → SavedVariables (written on logout and 
 - `companion/` — Python ≥ 3.11, uv, typer. `src/rambleon/`: `paths` (find WoW/WTF), `luaparse` (safe SV parser),
   `normalize`, `archive`, `watch` (+ `Finalizer`), `wowstate` (logout detection), `nights`, `export`, `summarize`,
   `publish` (Chapters.lua, HTML), `service` (launchd), `notify`, `config`, `doctor`, `install`, `cli`,
-  `model` (schema constants), `screenshots` (pairs WoW screenshots with a session by time).
+  `model` (schema constants), `screenshots` (pairs files with SCREENSHOT events, captions), `share` (GitHub Pages).
 - The companion wheel **bundles the AddOn** via an explicit per-file `force-include` list in `companion/pyproject.toml`.
   Adding a file to `addon/Rambleon/` means adding it there too, or `uv tool install` users get a broken AddOn.
   Without a checkout, `install.py` seeds `~/Rambleon/addon/Rambleon` from the bundled copy.
 - `archive/` — **source of truth**, gitignored. Raw snapshots never edited; normalized sessions never shrink.
 - `exports/` — regenerable, gitignored: `markdown/`, `prompts/`, `journal/` (sidecars), `html/`, `social/`.
 - `site/` — GitHub Pages (`.github/workflows/pages.yml`): landing page + `example/`, a committed snapshot of
-  Rambleon Birdsong's story pages. Refresh with `scripts/publish-example`; committing it makes the journal public.
+  Rambleon Birdsong's story pages. Refresh with `ramble share`; pushing makes the journal public.
 - `docs/` — `environment.md` (this Mac), `addon-api.md` (Forever facts + the SV bug), `data-model.md`,
   `progress.md` (running log; read "To verify next session" first), `roadmap.md` (product plan).
 
 ## What we know about the Forever client (verified in game)
 
-- Mainline 12.x UI codebase, version 1.60.1, build 69913. `WOW_PROJECT_ID` = 1. Surnames, no realms:
-  `UnitName("player")` → `"Rambleon Birdsong"`, realm `"Classic Beta PvE"`. WTF folder `70/Rambleon-Birdsong`.
+- Mainline 12.x UI codebase, version 1.60.1, builds 69913 → 70009. `WOW_PROJECT_ID` = 1. Surnames, no realms;
+  realm `"Classic Beta PvE"`, WTF folder `70/Rambleon-Birdsong`. **The name API changed with build 70009** (2026-09-24):
+  before, `UnitName("player")` → `"Rambleon Birdsong"` and `UnitFullName` → `"Rambleon Birdsong", "ClassicBetaPvE"`;
+  now `UnitName` → `"Rambleon"` and `UnitFullName` → `"Rambleon", "Birdsong"`. Both sides derive one `displayName`
+  (`ns.ComposeDisplayName` / `normalize.display_name`) and the game matches chapters by GUID, never by name alone.
 - `C_UI.Reload()` works from a popup button. `QUEST_TURNED_IN` fires with questID. No event registration failed.
 - The SavedVariables bug: files are written but not restored on **cold start**; on this Mac they *were* restored
   across `/reload`. Design assumes nothing: the Mac owns history.
 - `UnitLevel` at logout can be stale; end level is derived from event levels on both sides.
 - Kills come from the "X dies, you gain N experience." chat line (no combat log). Loot from the chat loot line
-  (uncommon+ only). Unverified in game as of 09-22: LOOT events, screenshots pairing.
+  (uncommon+ only). Unverified in game as of 09-22: LOOT events, `Screenshot()` and file pairing.
 
 ## Coding rules
 
@@ -107,7 +115,7 @@ scripts/test -k nights          # extra args go to pytest (single test: -k name,
 /reload in WoW                  # AddOn is symlinked; new files need a restart of WoW only when added to the TOC
 ramble service install          # restart the background watcher after companion changes
 /ramble debug                   # paste output + any Lua errors back here
-scripts/publish-example         # copy exports/html into site/example (public once pushed)
+ramble share tonight            # copy the page + pictures into site/example, commit, push (asks first)
 ```
 
 `/console scriptErrors 1` shows Lua errors in game. `scripts/bootstrap` sets up uv and `ramble` from scratch.
@@ -116,12 +124,12 @@ release. Record user-facing changes in `CHANGELOG.md` and bump `companion/pyproj
 
 ## Command cheat sheet
 
-In game: `/ramble` · `status` · `note <text>` · `mark` · `chapters` · `save` · `debug [on|off]` · `dump` · `help`.
+In game: `/ramble` · `status` · `note <text>` · `mark` · `shots [on|off]` · `chapters` · `save` · `debug [on|off]` · `dump` · `help`.
 Keybindings under AddOns: Open Adventure Log, Mark Moment.
 
 Mac: `ramble setup [--no-ai]` · `doctor [--fix]` · `uninstall` · `install [--copy]` · `service install|uninstall|status` · `watch [--no-ai] [--no-auto] [--voice]`
 · `ingest` · `reprocess` · `status` · `sessions` · `nights` · `show latest` · `export tonight|YYYY-MM-DD|--all`
-· `summarize tonight [--voice] [--no-ai]` · `page tonight` · `publish` · `voices`.
+· `summarize tonight [--voice] [--no-ai]` · `page tonight` · `publish` · `share [tonight|date|--all] [--yes] [--dry-run]` · `voices`.
 
 ## Where this is going
 

@@ -81,7 +81,7 @@ class Finalizer:
                 self.run(session)
 
 
-def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False,
+def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = True,
                  allow_bak: bool = True, after_capture: AfterCapture = None) -> list[str]:
     """Snapshot, parse and archive one SavedVariables file. Returns a list of outcome strings."""
     data = _read(path)
@@ -159,7 +159,7 @@ def process_file(path: Path, paths: Paths, archive: Archive, log: Log, copy_scre
     return outcomes
 
 
-def reprocess(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False) -> list[str]:
+def reprocess(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = True) -> list[str]:
     """Rebuild normalized sessions from every archived raw snapshot, oldest first (after companion upgrades)."""
     outcomes: list[str] = []
     snapshots = sorted(p for p in archive.raw_dir.glob("*.lua") if p.is_file())
@@ -187,7 +187,7 @@ def reprocess(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool =
     return outcomes
 
 
-def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = False,
+def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool = True,
                 after_capture: AfterCapture = None) -> list[str]:
     files = paths.saved_variables_files()
     if not files:
@@ -199,7 +199,7 @@ def ingest_once(paths: Paths, archive: Archive, log: Log, copy_screenshots: bool
     return outcomes
 
 
-def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_screenshots: bool = False,
+def watch(paths: Paths, archive: Archive, log: Log, interval: float = 1.0, copy_screenshots: bool = True,
           stop_after: float | None = None, rescan: float = 5.0, after_capture: AfterCapture = None,
           tick: Callable[[], None] | None = None) -> None:
     archive.ensure()

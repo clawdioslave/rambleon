@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import json
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -12,9 +13,13 @@ from .archive import Archive, atomic_write_bytes, is_trivial, load_json
 from .export import clock, describe, duration, export_filename, long_date, render_markdown, render_recap
 from .nights import chapter_number as night_number, nights
 from .paths import Paths
+from .screenshots import caption as shot_caption, event_index
 
 MAX_CHAPTERS_IN_GAME = 12
 MAX_LOG_CHARS = 8000
+RESIZER = shutil.which("sips")   # macOS image tool; web copies are 1600 px JPEGs when it is present
+WEB_WIDTH = 1600
+HERO_REASONS = ("LEVEL_UP", "MARK")
 
 
 def journal_sidecar_path(exports_dir: Path, session_id: str) -> Path:
@@ -55,6 +60,7 @@ def build_chapters(archive: Archive, exports_dir: Path) -> list[dict[str, Any]]:
             "number": number,
             "character": session["character"].get("displayName"),
             "slug": session["character"].get("slug"),
+            "guid": session["character"].get("guid"),
             "date": long_date(session.get("startedAt")),
             "startedAt": session.get("startedAt") or 0,
             "duration": duration(session.get("playedSeconds")),
@@ -72,7 +78,7 @@ def write_chapters_lua(chapters: list[dict[str, Any]], addon_src: Path) -> Path:
              "RambleonChapters = {"]
     for c in chapters:
         lines.append("  {")
-        for key in ("id", "character", "slug", "date", "duration", "title", "recap", "journal", "log"):
+        for key in ("id", "character", "slug", "guid", "date", "duration", "title", "recap", "journal", "log"):
             lines.append(f"    {key} = {lua_string(str(c.get(key) or ''))},")
         lines.append(f"    number = {int(c.get('number') or 0)},")
         lines.append(f"    startedAt = {int(c.get('startedAt') or 0)},")
@@ -93,26 +99,31 @@ def publish_chapters(archive: Archive, paths: Paths) -> tuple[Path, int]:
     return write_chapters_lua(chapters, paths.addon_src), len(chapters)
 
 
-def write_html_index(archive: Archive, exports_dir: Path) -> Path:
+def write_html_index(archive: Archive, exports_dir: Path, only: set[str] | None = None, out: Path | None = None) -> Path:
     """exports/html/index.html: every night, newest first, linking to its story page (built if missing)."""
     rows = []
     all_nights = nights(archive)
     for night in reversed(all_nights):
         page = exports_dir / "html" / export_filename(night).replace(".md", ".html")
+        if only is not None and page.name not in only:
+            continue
         if not page.exists():
             export_html(night, archive, exports_dir)
         journal = load_journal(exports_dir, night["id"])
         number = night_number(archive, night)
         cnt = night.get("counters", {})
-        rows.append(f"<li><a href='{html.escape(page.name)}'>{html.escape(chapter_title(night, journal, number))}</a>"
+        images = prepare_images(night, page.with_suffix(""))
+        hero = pick_hero(images)
+        thumb = f"<img class='thumb' src='{html.escape(hero['src'])}' alt=''>" if hero else ""
+        rows.append(f"<li>{thumb}<a href='{html.escape(page.name)}'>{html.escape(chapter_title(night, journal, number))}</a>"
                     f"<span class='m'> — {html.escape(long_date(night.get('startedAt')))} · {html.escape(duration(night.get('playedSeconds')))}"
                     f" · {cnt.get('questsCompleted', 0)} quests · {cnt.get('kills', 0)} kills · {len(night.get('people', []))} people</span></li>")
     name = html.escape(all_nights[-1]["character"].get("displayName", "")) if rows else "Rambleon"
-    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>{name} — Adventure Journal</title><style>{CSS}"
+    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>{name} — Adventure Journal</title>{FONTS}<style>{CSS}"
            "li{margin:10px 0}.m{color:#6b5233;font-size:14px}</style></head><body>"
            f"<h1>{name}</h1><div class='meta'>Adventure journal · {len(rows)} chapter{'s' if len(rows) != 1 else ''}</div>"
            "<ul>" + "".join(rows) + "</ul><footer>Recorded by Rambleon</footer></body></html>")
-    out = exports_dir / "html" / "index.html"
+    out = out or exports_dir / "html" / "index.html"
     atomic_write_bytes(out, doc.encode("utf-8"))
     return out
 
@@ -120,14 +131,21 @@ def write_html_index(archive: Archive, exports_dir: Path) -> Path:
 # ---------------------------------------------------------------------------------------------------
 # HTML story page (for Substack, notes, or just reading in a browser)
 
+FONTS = ("<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+         "<link href='https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap' rel='stylesheet'>")
+
 CSS = """
 body{max-width:720px;margin:40px auto;padding:0 20px;font:17px/1.6 Georgia,'Times New Roman',serif;color:#2b1d0e;background:#f5ecd8}
-h1{font-size:34px;margin:0 0 4px;letter-spacing:.5px}h2{font-size:22px;margin:36px 0 8px;border-bottom:1px solid #c9b48a;padding-bottom:4px}
+h1{font:700 36px/1.2 Cinzel,Georgia,serif;margin:0 0 6px;letter-spacing:1px;color:#5a3510;text-shadow:0 1px 0 #fff6e0,0 2px 6px rgba(176,141,76,.35)}
+h1::after{content:'';display:block;width:120px;height:2px;margin-top:8px;background:linear-gradient(90deg,#b08d4c,rgba(176,141,76,0))}
+h2{font-size:22px;margin:36px 0 8px;border-bottom:1px solid #c9b48a;padding-bottom:4px}
 .meta{color:#6b5233;margin-bottom:24px}.recap{white-space:pre-line;background:#efe3c6;border-left:4px solid #b08d4c;padding:12px 16px;margin:20px 0}
 .journal p{margin:0 0 14px}ul{padding-left:22px}li{margin:3px 0}figure{margin:24px 0}figure img{width:100%;border:1px solid #c9b48a;border-radius:4px}
 figcaption{font-size:14px;color:#6b5233;margin-top:6px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin:12px 0}
 .stat b{display:block;font-size:24px}.stat span{font-size:13px;color:#6b5233;text-transform:uppercase;letter-spacing:1px}
 footer{margin-top:48px;font-size:13px;color:#8a7250}
+figure.hero{margin:0 0 28px}li.shot{list-style:none;margin:10px 0 18px -22px}li.shot figure{margin:0}
+.thumb{width:96px;height:54px;object-fit:cover;border:1px solid #c9b48a;border-radius:3px;vertical-align:middle;margin-right:10px}
 """
 
 
@@ -140,15 +158,73 @@ def _paragraphs(text: str) -> str:
     return "\n".join(out)
 
 
+def _web_copy(src: Path, image_dir: Path, stem: str) -> Path | None:
+    """A browser-friendly, web-sized copy named after the page (never the WoW filename). Returns None if the
+    source is gone."""
+    if not src.exists():
+        return None
+    image_dir.mkdir(parents=True, exist_ok=True)
+    jpg = image_dir / f"{stem}.jpg"
+    fresh = jpg.exists() and jpg.stat().st_mtime >= src.stat().st_mtime
+    if fresh:
+        return jpg
+    if RESIZER:
+        r = subprocess.run([RESIZER, "-Z", str(WEB_WIDTH), "-s", "format", "jpeg", "-s", "formatOptions", "80",
+                            str(src), "--out", str(jpg)], capture_output=True, text=True)
+        if r.returncode == 0 and jpg.exists():
+            return jpg
+    if src.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+        return None                      # a TGA the browser could not show anyway
+    plain = image_dir / f"{stem}{src.suffix.lower()}"
+    if not plain.exists() or plain.stat().st_mtime < src.stat().st_mtime:
+        shutil.copy2(src, plain)
+    return plain
+
+
+def prepare_images(session: dict[str, Any], image_dir: Path | None) -> list[dict[str, Any]]:
+    """Web copies of a session's screenshots next to its page: exports/html/<page>/<page>-NN.jpg."""
+    if image_dir is None:
+        return []
+    events = session.get("events", [])
+    out = []
+    shots = sorted(session.get("screenshots", []), key=lambda s: s.get("takenAt") or 0)
+    for n, shot in enumerate(shots, 1):
+        src = Path(shot.get("archived") or shot.get("path") or "")
+        copy = _web_copy(src, image_dir, f"{image_dir.name}-{n:02d}") if src.name else None
+        if copy is None:
+            continue
+        out.append({"src": f"{image_dir.name}/{copy.name}", "caption": shot.get("caption") or shot_caption(shot, events),
+                    "eventIndex": event_index(shot), "reason": shot.get("reason"), "takenAt": shot.get("takenAt")})
+    return out
+
+
+def pick_hero(images: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for reason in HERO_REASONS:
+        for img in images:
+            if img.get("reason") == reason:
+                return img
+    return images[0] if images else None
+
+
+def _figure(img: dict[str, Any], cls: str = "") -> str:
+    cap = f"{clock(img.get('takenAt'))} — {img['caption']}"
+    return (f"<figure{' class=' + repr(cls) if cls else ''}><img src='{html.escape(img['src'])}' alt='{html.escape(img['caption'])}'>"
+            f"<figcaption>{html.escape(cap)}</figcaption></figure>")
+
+
 def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number: int, image_dir: Path | None) -> str:
     c = session.get("character", {})
     cnt = session.get("counters", {})
     title = chapter_title(session, journal, number)
     name = c.get("displayName", "Unknown")
     parts = [f"<!doctype html><html><head><meta charset='utf-8'><title>{html.escape(title)} — {html.escape(name)}</title>",
-             f"<style>{CSS}</style></head><body>",
+             f"{FONTS}<style>{CSS}</style></head><body>",
              f"<h1>{html.escape(title)}</h1>",
              f"<div class='meta'>{html.escape(name)} · {html.escape(long_date(session.get('startedAt')))} · {html.escape(duration(session.get('playedSeconds')))} in Azeroth</div>"]
+    images = prepare_images(session, image_dir)
+    hero = pick_hero(images)
+    if hero:
+        parts.append(_figure(hero, "hero"))
     if journal and journal.get("journal"):
         parts.append("<div class='journal'>" + _paragraphs(journal["journal"]) + "</div>")
     recap = (journal or {}).get("recap") or render_recap(session)
@@ -157,28 +233,27 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
              ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)), ("Deaths", cnt.get("deaths", 0)),
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
-    shots = session.get("screenshots", [])
-    if shots:
-        parts.append("<h2>Screenshots</h2>")
-        events = session.get("events", [])
-        for s in shots:
-            src = s.get("archived") or s.get("path")
-            if image_dir is not None and src and Path(src).exists():
-                dest = image_dir / Path(src).name
-                image_dir.mkdir(parents=True, exist_ok=True)
-                if not dest.exists():
-                    shutil.copy2(src, dest)
-                src = f"{image_dir.name}/{dest.name}"
-            cap = clock(s.get("takenAt"))
-            idx = s.get("nearestEventIndex")
-            if idx is not None and idx < len(events):
-                cap += " — near: " + describe(events[idx])
-            parts.append(f"<figure><img src='{html.escape(str(src))}' alt=''><figcaption>{html.escape(cap)}</figcaption></figure>")
+    # Pictures sit on the timeline at their moment; the hero is not repeated.
+    by_event: dict[int, list[dict[str, Any]]] = {}
+    loose: list[dict[str, Any]] = []
+    for img in images:
+        if img is hero:
+            continue
+        if img.get("eventIndex") is None:
+            loose.append(img)
+        else:
+            by_event.setdefault(img["eventIndex"], []).append(img)
+    pictured = {i for i in by_event} | ({hero["eventIndex"]} if hero and hero.get("eventIndex") is not None else set())
     parts.append("<h2>The Journey</h2><ul>")
-    for ev in session.get("events", []):
+    for i, ev in enumerate(session.get("events", [])):
         if ev.get("type") == "RESUMED":
             continue
-        parts.append(f"<li>{html.escape(clock(ev.get('t')))} — {html.escape(describe(ev))}</li>")
+        if not (ev.get("type") == "SCREENSHOT" and i in pictured):   # the picture itself stands for the event
+            parts.append(f"<li>{html.escape(clock(ev.get('t')))} — {html.escape(describe(ev))}</li>")
+        for img in by_event.get(i, []):
+            parts.append("<li class='shot'>" + _figure(img) + "</li>")
+    for img in loose:
+        parts.append("<li class='shot'>" + _figure(img) + "</li>")
     parts.append("</ul>")
     notes = [ev for ev in session.get("events", []) if ev.get("type") == "NOTE"]
     if notes:

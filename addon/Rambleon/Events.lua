@@ -131,6 +131,7 @@ handlers.PLAYER_LEVEL_UP = function(level)
   ns.AddEvent("LEVEL_UP", { level = level })
   if level then s.character.endLevel = level end
   ns.UpdateXP()
+  ns.TakeScreenshot("LEVEL_UP", { level = level }, 1.0)   -- a second later the level-up glow is on screen
 end
 
 handlers.QUEST_ACCEPTED = function(a, b)
@@ -192,7 +193,23 @@ end
 
 handlers.SCREENSHOT_SUCCEEDED = function()
   if not ns.EnsureSession() then return end
-  ns.AddEvent("SCREENSHOT", {})
+  local p = ns.ConsumePendingShot()
+  if p then
+    ns.shotStatus = "ok"
+    ns.AddEvent("SCREENSHOT", { reason = p.reason, auto = true, level = p.level, zone = p.zone, subzone = p.subzone })
+  else
+    ns.AddEvent("SCREENSHOT", { reason = "MANUAL" })
+  end
+end
+
+handlers.SCREENSHOT_FAILED = function()
+  ns.RestoreUIAfterShot()
+  local p = ns.pendingShot
+  ns.pendingShot = nil
+  if p then
+    ns.shotStatus = "failed"
+    ns.Warn("automatic screenshot failed (" .. tostring(p.reason) .. ")")
+  end
 end
 
 frame:SetScript("OnEvent", function(self, event, ...)

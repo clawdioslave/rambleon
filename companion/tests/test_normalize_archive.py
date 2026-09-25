@@ -5,7 +5,7 @@ from pathlib import Path
 from rambleon.archive import Archive
 from rambleon.export import render_markdown
 from rambleon.luaparse import parse, to_python
-from rambleon.normalize import sessions_from_db
+from rambleon.normalize import display_name, sessions_from_db, surname
 from rambleon.summarize import build_prompt, split_output
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -112,3 +112,19 @@ def test_prompt_and_split():
     assert "# Chapter 3" in prompt and "Only what happened" in prompt and "Moonhoof" in prompt
     journal, recap = split_output("# Chapter 3 — Test\n\nbody\n\n---RECAP---\n2h in Azeroth.\nRamble on.")
     assert journal.startswith("# Chapter 3") and recap.startswith("2h")
+
+
+def test_display_name_survives_the_client_name_change():
+    old_build = {"name": "Rambleon Birdsong", "fullName": "Rambleon Birdsong", "realmFromFullName": "ClassicBetaPvE",
+                 "realm": "Classic Beta PvE", "normalizedRealm": "ClassicBetaPvE"}
+    new_build = {"name": "Rambleon", "fullName": "Rambleon", "realmFromFullName": "Birdsong",
+                 "realm": "Classic Beta PvE", "normalizedRealm": "ClassicBetaPvE"}
+    mainline = {"name": "Rambleon", "fullName": "Rambleon", "realmFromFullName": "Area 52",
+                "realm": "Area 52", "normalizedRealm": "Area52"}
+    assert surname(old_build) is None and display_name(old_build) == "Rambleon Birdsong"
+    assert surname(new_build) == "Birdsong" and display_name(new_build) == "Rambleon Birdsong"
+    assert surname(mainline) is None and display_name(mainline) == "Rambleon"
+    assert display_name({"name": "Rambleon", "displayName": "Rambleon Birdsong"}) == "Rambleon Birdsong"
+    assert display_name({}) == "Unknown"
+    s = load_sessions()[0]
+    assert s["character"]["displayName"] == "Rambleon Birdsong" and s["character"]["slug"] == "rambleon-birdsong"

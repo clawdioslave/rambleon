@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .archive import atomic_write_bytes
+from .screenshots import caption
 
 
 def clock(t: int | None) -> str:
@@ -63,6 +64,12 @@ def describe(ev: dict[str, Any]) -> str:
     if t == "ACHIEVEMENT":
         return f"Earned achievement: {ev.get('name') or ev.get('id')}"
     if t == "SCREENSHOT":
+        if ev.get("reason") == "LEVEL_UP":
+            return f"Screenshot (Level {ev.get('level')})"
+        if ev.get("reason") == "MARK":
+            return "Screenshot (marked moment)"
+        if ev.get("reason") == "ZONE_ENTER":
+            return f"Screenshot (entering {ev.get('zone')})"
         return "Took a screenshot"
     if t == "NOTE":
         return f"Note: \"{ev.get('text')}\""
@@ -156,11 +163,7 @@ def render_markdown(session: dict[str, Any]) -> str:
     if shots:
         lines += ["", "## Screenshots", ""]
         for s in shots:
-            near = ""
-            idx = s.get("nearestEventIndex")
-            if idx is not None and idx < len(session.get("events", [])):
-                near = f" (near: {describe(session['events'][idx])})"
-            lines.append(f"* {clock(s.get('takenAt'))} — `{s.get('archived') or s.get('path')}`{near}")
+            lines.append(f"* {clock(s.get('takenAt'))} — {caption(s, session.get('events', []))} · `{s.get('archived') or s.get('path')}`")
     lines += ["", "---", f"Session `{session.get('id')}` · schema {session.get('schemaVersion')} · Rambleon {session.get('client', {}).get('addonVersion', '?')}", ""]
     return "\n".join(lines)
 

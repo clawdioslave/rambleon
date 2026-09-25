@@ -29,6 +29,7 @@ function ns.InitDB()
   RambleonDB.schemaVersion = ns.SCHEMA_VERSION
   RambleonDB.addonVersion = ns.VERSION
   if type(RambleonDB.sessions) ~= "table" then RambleonDB.sessions = {} end
+  if type(RambleonDB.settings) ~= "table" then RambleonDB.settings = {} end
 end
 
 -- Location ------------------------------------------------------------------
@@ -68,6 +69,11 @@ function ns.CaptureCharacter()
   end
   c.realm = ns.CleanString(ns.SafeCall(GetRealmName))
   c.normalizedRealm = ns.CleanString(ns.SafeCall(GetNormalizedRealmName))
+  -- Forever build 70009 moved the surname into UnitFullName's second return ("Rambleon", "Birdsong") and
+  -- dropped it from UnitName; earlier builds returned "Rambleon Birdsong", "ClassicBetaPvE". Keep the raw
+  -- fields as reported and derive one stable display name from them (identity itself is the GUID).
+  c.surname = ns.Surname(c)
+  c.displayName = ns.ComposeDisplayName(c)
   local race, raceFile = ns.SafeCall(UnitRace, "player")
   c.race, c.raceFile = ns.CleanString(race), ns.CleanString(raceFile)
   local class, classFile = ns.SafeCall(UnitClass, "player")
@@ -99,16 +105,35 @@ function ns.CaptureClient()
   return cl
 end
 
+-- The second return of UnitFullName is a surname when it is not the realm (any spelling) and the name has none.
+function ns.Surname(c)
+  local r = c.realmFromFullName
+  local name = c.fullName or c.name
+  if type(r) ~= "string" or r == "" or type(name) ~= "string" or name:find(" ", 1, true) then return nil end
+  local realm, normalized = c.realm, c.normalizedRealm
+  if r == realm or r == normalized then return nil end
+  if type(realm) == "string" and r == (realm:gsub("%s+", "")) then return nil end
+  return r
+end
+
+function ns.ComposeDisplayName(c)
+  local name = c.fullName or c.name
+  if type(name) ~= "string" or name == "" then return nil end
+  local surname = c.surname or ns.Surname(c)
+  if surname and name:sub(-#surname) ~= surname then return name .. " " .. surname end
+  return name
+end
+
 function ns.DisplayName()
   local c = ns.session and ns.session.character
-  return (c and (c.fullName or c.name)) or ns.CleanString(ns.SafeCall(UnitName, "player")) or "Adventurer"
+  return (c and (c.displayName or c.fullName or c.name)) or ns.CleanString(ns.SafeCall(UnitName, "player")) or "Adventurer"
 end
 
 -- Session lifecycle ----------------------------------------------------------
 
 local function newSessionId(character)
   local stamp = date("!%Y-%m-%dT%H%M%SZ")
-  local base = stamp .. "_" .. ns.Slug(character.fullName or character.name or "unknown")
+  local base = stamp .. "_" .. ns.Slug(character.displayName or character.fullName or character.name or "unknown")
   local id, n = base, 1
   local taken = true
   while taken do
@@ -342,15 +367,29 @@ function ns.RecordZone(loc)
   return z
 end
 
+local function zoneVisited(zone)
+  local s = ns.session
+  if not s then return false end
+  for _, z in ipairs(s.zones) do
+    if z.zone == zone then return true end
+  end
+  return false
+end
+
 function ns.NoteZoneChange(force)
   if not ns.EnsureSession() then return end
   local loc = ns.GetLocation()
   if not loc.zone then return end
   local key = loc.zone .. "|" .. (loc.subzone or "")
   if key == ns.lastZoneKey and not force then return end
+  -- A picture of the first arrival in a new main zone tonight. Not at login (no previous zone),
+  -- not for subzone hops, not after a /reload (SeedFromSession restores lastZoneKey).
+  local prevZone = ns.lastZoneKey and ns.lastZoneKey:match("^(.-)|") or nil
+  local firstVisit = prevZone ~= nil and prevZone ~= loc.zone and not zoneVisited(loc.zone)
   ns.lastZoneKey = key
   ns.RecordZone(loc)
   ns.AddEvent("ZONE_ENTER", { zone = loc.zone, subzone = loc.subzone, mapID = loc.mapID, x = loc.x, y = loc.y })
+  if firstVisit then ns.TakeScreenshot("ZONE_ENTER", { zone = loc.zone, subzone = loc.subzone }, 1.0) end
 end
 
 -- People ---------------------------------------------------------------------
@@ -624,7 +663,96 @@ end
 
 function ns.MarkMoment()
   if not ns.EnsureSession() then return nil end
-  return ns.AddEvent("MARK", {})
+  local ev = ns.AddEvent("MARK", {})
+  ns.TakeScreenshot("MARK", {}, 0.2)
+  return ev
+end
+
+-- Automatic screenshots -------------------------------------------------------
+-- The game's own Screenshot() writes WoWScrnShot_*.jpg to <WoW>/Screenshots; the companion pairs the
+-- file with the SCREENSHOT event by time. We tag the event with why it was taken so the story page
+-- can caption it ("Reached Level 9 in Dolanaar"). The UI is never hidden. Unverified on Forever:
+-- everything is guarded, and /ramble debug reports whether it worked.
+
+local AUTO_SHOT_GAP = 3        -- seconds between automatic screenshots (the client dislikes bursts)
+local PENDING_TTL = 15         -- seconds a pending reason stays valid for the next SCREENSHOT_SUCCEEDED
+
+ns.pendingShot = nil           -- { reason, at, level, zone, subzone } while a Screenshot() is in flight
+ns.restoreUI = nil             -- shows our frames again once the picture is taken
+ns.lastAutoShotAt = 0          -- GetTime()
+ns.shotStatus = "none"         -- none | ok | failed | unsupported | disabled
+
+function ns.AutoShotsEnabled()
+  return not (RambleonDB and RambleonDB.settings and RambleonDB.settings.autoScreenshots == false)
+end
+
+function ns.SetAutoShots(on)
+  if RambleonDB and type(RambleonDB.settings) == "table" then
+    RambleonDB.settings.autoScreenshots = on and true or false
+  end
+  return ns.AutoShotsEnabled()
+end
+
+function ns.RestoreUIAfterShot()
+  local restore = ns.restoreUI
+  ns.restoreUI = nil
+  if restore then pcall(restore) end
+end
+
+-- Returns the pending shot for SCREENSHOT_SUCCEEDED, or nil when the event is a manual screenshot.
+function ns.ConsumePendingShot()
+  ns.RestoreUIAfterShot()
+  local p = ns.pendingShot
+  ns.pendingShot = nil
+  if p and (ns.Now() - (p.at or 0)) <= PENDING_TTL then return p end
+  return nil
+end
+
+function ns.TakeScreenshot(reason, fields, delay)
+  if not ns.AutoShotsEnabled() then
+    ns.shotStatus = "disabled"
+    return false
+  end
+  if type(Screenshot) ~= "function" then
+    if ns.shotStatus ~= "unsupported" then ns.Debug("Screenshot() is not available on this client") end
+    ns.shotStatus = "unsupported"
+    return false
+  end
+  local now = GetTime and GetTime() or 0
+  if now - (ns.lastAutoShotAt or 0) < AUTO_SHOT_GAP then
+    ns.Debug("screenshot skipped (" .. tostring(reason) .. ", rate limit)")
+    return false
+  end
+  ns.lastAutoShotAt = now
+  local pending = { reason = tostring(reason), at = ns.Now() }
+  for k, v in pairs(fields or {}) do
+    local clean = ns.Clean(v)
+    if clean ~= nil then pending[k] = clean end
+  end
+  -- Rambleon's own panel must not be in the picture: hide it now, show it again after the client answers.
+  ns.RestoreUIAfterShot()
+  if ns.UI and ns.UI.HideForScreenshot then ns.restoreUI = ns.UI.HideForScreenshot() end
+  local function fire()
+    ns.pendingShot = pending
+    local ok, err = pcall(Screenshot)
+    if not ok then
+      ns.pendingShot = nil
+      ns.shotStatus = "failed"
+      ns.RestoreUIAfterShot()
+      ns.Warn("Screenshot() failed (" .. pending.reason .. "): " .. tostring(err))
+    else
+      ns.Debug("screenshot requested (" .. pending.reason .. ")")
+    end
+  end
+  if C_Timer and C_Timer.After then
+    C_Timer.After((delay or 0) + 3, ns.RestoreUIAfterShot)   -- safety net if the client never answers
+  end
+  if delay and delay > 0 and C_Timer and C_Timer.After then
+    C_Timer.After(delay, fire)
+  else
+    fire()
+  end
+  return true
 end
 
 -- Heartbeat ticker (started once the world is entered)

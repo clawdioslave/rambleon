@@ -60,23 +60,26 @@ To remove it: `ramble uninstall` (your archive stays unless you ask for it to go
 
 - `/ramble` opens the panel: time, place, level, quests, places, kills, loot, deaths, people, and the recent journey.
 - `/ramble note the cave is extremely cursed` — your own words are the best evidence the writer gets.
-- `/ramble mark` — remember this moment (there is a keybinding for it under AddOns).
+- `/ramble mark` — remember this moment and take a picture (there is a keybinding for it under AddOns).
+- Level ups and the first step into a new zone are photographed too; `/ramble shots off` if you would rather not.
 - `/ramble chapters` — read past chapters in game; click the text, Ctrl-A, Ctrl-C.
 - Log out when you are done. That is the save. A few seconds later the chapter is written on your Mac.
 
 On the Mac: `ramble nights` lists chapters, `ramble page tonight` opens the story page, `ramble summarize tonight
---voice field-journal` rewrites a chapter in another voice, `ramble doctor --fix` repairs a broken link or a stopped
-watcher. `ramble --help` has the rest.
+--voice field-journal` rewrites a chapter in another voice, `ramble share tonight` puts a chapter (pictures included) on
+your GitHub Pages site after asking, `ramble doctor --fix` repairs a broken link or a stopped watcher. `ramble --help`
+has the rest.
 
 ## What it records, and what it never records
 
 Recorded: where you went, quests accepted and completed and their objectives, levels, experience, kills that gave
 experience (from the chat line), uncommon-or-better loot, deaths, who you grouped with and for how long, dungeons,
-achievements, screenshots (by time), your notes and marks, playtime.
+achievements, screenshots (yours, and the ones it takes at level ups, marks and new zones), your notes and marks, playtime.
 
 Never: damage numbers or the combat log, chat content, other players beyond your group roster as the game shows it,
 anything Blizzard marks protected or secret. Nothing leaves your Mac. If you use the AI step, the only thing sent is
-the prompt for that chapter, through your own Claude login.
+the prompt for that chapter, through your own Claude login. `ramble share` is the one command that publishes a chapter,
+and it asks first.
 
 Your history lives as plain JSON in `~/Rambleon/archive/` (or the checkout's `archive/`). Raw files WoW wrote are
 kept byte for byte and never edited. Stories are always generated downstream; the record is never touched to make

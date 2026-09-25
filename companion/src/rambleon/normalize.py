@@ -38,6 +38,36 @@ def sessions_from_db(db: Any) -> list[dict[str, Any]]:
     return out
 
 
+def surname(character: dict[str, Any]) -> str | None:
+    """The second return of UnitFullName when it is a surname rather than the realm.
+
+    Forever build 70009 reports ("Rambleon", "Birdsong"); earlier builds reported ("Rambleon Birdsong", "ClassicBetaPvE");
+    mainline reports ("Name", "Realm"). The realm never counts as a surname, in any spelling."""
+    r = character.get("realmFromFullName")
+    name = character.get("fullName") or character.get("name")
+    if not isinstance(r, str) or not r or not isinstance(name, str) or " " in name:
+        return None
+    realm = character.get("realm") if isinstance(character.get("realm"), str) else ""
+    normalized = character.get("normalizedRealm") if isinstance(character.get("normalizedRealm"), str) else ""
+    if r in (realm, normalized, "".join(realm.split())):
+        return None
+    return r
+
+
+def display_name(character: dict[str, Any]) -> str:
+    """One stable name for a character however the client spelled it. The AddOn's own displayName wins."""
+    own = character.get("displayName")
+    if isinstance(own, str) and own:
+        return own
+    name = character.get("fullName") or character.get("name")
+    if not isinstance(name, str) or not name:
+        return "Unknown"
+    sur = surname(character)
+    if sur and not name.endswith(sur):
+        return f"{name} {sur}"
+    return name
+
+
 def normalize_session(raw: Any, addon_version: Any = None, db_schema: Any = None, now: float | None = None) -> dict[str, Any] | None:
     raw = to_python(raw) if isinstance(raw, dict) and any(isinstance(k, int) for k in raw) else raw
     if not isinstance(raw, dict):
@@ -57,7 +87,8 @@ def normalize_session(raw: Any, addon_version: Any = None, db_schema: Any = None
 
     character = raw.get("character") if isinstance(raw.get("character"), dict) else {}
     s["character"] = {k: v for k, v in character.items() if isinstance(v, (str, int, float, bool))}
-    s["character"]["displayName"] = character.get("fullName") or character.get("name") or "Unknown"
+    s["character"]["surname"] = surname(character)
+    s["character"]["displayName"] = display_name(character)
     s["character"]["slug"] = slugify(s["character"]["displayName"])
     client = raw.get("client") if isinstance(raw.get("client"), dict) else {}
     s["client"] = {k: v for k, v in client.items() if isinstance(v, (str, int, float, bool))}

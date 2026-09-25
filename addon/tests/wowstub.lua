@@ -4,7 +4,9 @@ local WoW = {}
 _G.WoW = WoW
 
 unpack = unpack or table.unpack
-time = os.time
+-- Wall-clock time follows the simulated clock, so the fixture's events are spaced like a real evening.
+local t0 = os.time() - 3600   -- the simulated evening happened an hour ago
+time = function() return t0 + math.floor(WoW.clock - 1000) end
 date = os.date
 tinsert = table.insert
 UISpecialFrames = {}
@@ -67,6 +69,17 @@ function PlaySound() end
 function StaticPopup_Show(name) WoW.lastPopup = name; return {} end
 function ReloadUI() WoW.reloadCalled = true end
 function issecretvalue() return false end
+WoW.screenshots = 0
+WoW.failNextScreenshot = false
+-- The client writes the file, then fires SCREENSHOT_SUCCEEDED (or _FAILED) a moment later.
+function Screenshot()
+  WoW.screenshots = WoW.screenshots + 1
+  local fail = WoW.failNextScreenshot
+  WoW.failNextScreenshot = false
+  table.insert(WoW.timers, { at = WoW.clock + 0.1, fn = function()
+    WoW.Fire(fail and "SCREENSHOT_FAILED" or "SCREENSHOT_SUCCEEDED")
+  end })
+end
 
 C_AddOns = { GetAddOnMetadata = function(_, key) if key == "Version" then return "0.1.0-test" end end }
 C_Map = {

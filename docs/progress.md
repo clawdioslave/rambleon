@@ -90,7 +90,35 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - Verified: install from the built wheel in a clean venv against a fake WoW tree (install → doctor → ingest → publish).
 - CLAUDE.md rewritten for the current product; roadmap rewritten as the "offer it" plan (phases A–D).
 
+### 2026-09-22, evening — pictures
+- The AddOn now takes screenshots itself (`Screenshot()`, guarded) at level ups, `/ramble mark` and the first visit to
+  a new main zone each night; `/ramble shots on|off`; the SCREENSHOT event carries the reason.
+- Companion: files pair with SCREENSHOT events (not "nearest event", which was always the screenshot itself), captions
+  like "Reached Level 9 in Dolanaar", copies into `archive/screenshots/` by default, re-pairing when the chapter is
+  written so a picture taken after the last save still lands.
+- Story page: hero picture + pictures on the timeline, web copies named `<page>-NN.jpg` (sips, 1600 px) so they are
+  not caught by the `WoWScrnShot_*` ignore rule; thumbnails on the index. Prompt lists when pictures were taken.
+- `ramble share tonight|--all [--yes] [--dry-run]` copies pages + pictures into `site/example`, commits, pushes after
+  asking. `scripts/publish-example` wraps it. 0.3.0.
+- Test stub: `time()` now follows the simulated clock, so the fixture's events are spaced like a real evening.
+
+### Test script for the first night with pictures (2026-09-23)
+In game, in order, with `/console scriptErrors 1`:
+1. `/reload` → `/ramble debug` must show `auto shots: on, Screenshot(): available`. If `missing`, stop: Forever has no `Screenshot()`.
+2. `/ramble mark` → flash; `/ramble dump` ends with "Screenshot (marked moment)".
+3. `/ramble mark` again at once → no flash (rate limit). Subzone walk → no flash. New zone → one flash ~2.5 s after the
+   name appears. Level up → flash ~1 s after the ding. Manual screenshot key → dump shows "Took a screenshot".
+4. `/ramble shots off` + mark → no flash; `/ramble shots on`. Paste `/ramble debug` before logging out.
+On the Mac after logout: `ls "<WoW>/_classic_beta_/Screenshots/"` (note the extension), `ls archive/screenshots/*/`,
+`ramble page tonight` (hero + timeline pictures), then `ramble share tonight` only if it should be public.
+
 ### To verify next session
+- `Screenshot()` exists and fires `SCREENSHOT_SUCCEEDED` on Forever: `/ramble debug` → `auto shots: on, Screenshot(): available, last: ok`
+  after a `/ramble mark`; a file appears in `_classic_beta_/Screenshots/` (which format? `screenshotFormat` CVar).
+- Level-up picture shows the glow (1 s delay); zone picture is not a loading-screen fade (1 s after the debounce).
+- Two marks within 3 s → one file; a subzone walk → no picture; `/ramble shots off` survives a cold start?
+- After logout: `archive/screenshots/<session>/` populated, story page shows the hero + timeline pictures,
+  `ramble share --dry-run` lists them.
 - Loot capture in the real client (the three greens came before the loot code was loaded; no LOOT events yet).
 - Whether `/ramble chapters` shows tonight's chapter after login (published at 23:27, republished after reprocess).
 - Whether logout detection fires (watch.log will say "logged out — writing the chapter").
@@ -117,6 +145,21 @@ Goal: first playable milestone (AddOn loads, `/ramble` works, a session is captu
 - Whether the per-character SV file lands under `WTF/Account/<acct>/70/Rambleon-Birdsong/SavedVariables/`.
 - Whether `QuestBG-Parchment` atlas exists (harmless either way) and how the panel looks.
 - Any events listed under "failed events" in `/ramble debug`.
+
+### 2026-09-24 — Forever build 70009 changed the player's name API; only one chapter showed in game
+- Symptom: `/ramble chapters` listed only tonight's chapter. Cause: the client update (69977 → 70009, "Sep 23 2026")
+  now returns `UnitName("player")` = `"Rambleon"` and `UnitFullName` = `"Rambleon", "Birdsong"`. The AddOn's display
+  name became "Rambleon", slug `rambleon`, and the chapter window filters by slug; the companion treated it as a new
+  character (night `night-2026-09-24-rambleon`, "Chapter 1" again, own story-page group, local overrides not applied).
+  The GUID never changed.
+- Fix: `ns.Surname` / `ns.ComposeDisplayName` (AddOn) and `normalize.surname` / `display_name` (companion) derive
+  `displayName` from the raw fields; `Chapters.lua` carries `guid` and `myChapters()` matches by GUID first, slug as
+  fallback. `NORMALIZED_VERSION` 2. Tests for both shapes plus mainline in `run.lua` and pytest.
+- Repair: `ramble reprocess` (tonight's two sessions → `rambleon-birdsong`), journal sidecar renamed to
+  `night-2026-09-24-rambleon-birdsong` and renumbered to Chapter 4 (text kept), stale `2026-09-24-rambleon*` exports
+  removed, `export`/`page`/`publish` rerun, watcher restarted. `Chapters.lua`: 4 chapters, one slug, GUID on each.
+- Note: finalization reruns the AI journal for the night, so tonight's text is rewritten again when the player logs out.
+- To verify in game: `/reload` → `/ramble chapters` shows "4 of 4"; `/ramble debug` shows displayName Rambleon Birdsong.
 
 ### Later
 - Milestone 2: nicer timeline, satisfying MARK MOMENT, minimap button or keybind polish, Tier 2 events (loot, hearth).

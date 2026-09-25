@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 SCHEMA_VERSION = 1
-NORMALIZED_VERSION = 1
+NORMALIZED_VERSION = 2  # 2: displayName/slug derived with the surname rule, guid published in game
 SUSPEND_TIMEOUT = 600  # seconds; a suspended session older than this is treated as ended
 KEEP_ALL = True
 

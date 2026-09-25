@@ -42,6 +42,8 @@ function ns.DebugReport()
   end
   local loc = ns.GetLocation()
   add("zone", tostring(loc.zone) .. " / " .. tostring(loc.subzone) .. " (map " .. tostring(loc.mapID) .. ")")
+  add("auto shots", string.format("%s, Screenshot(): %s, last: %s", ns.AutoShotsEnabled() and "on" or "off",
+                                  type(Screenshot) == "function" and "available" or "missing", tostring(ns.shotStatus)))
   add("failed events", #ns.failedEvents > 0 and table.concat(ns.failedEvents, ", ") or "none")
   add("warnings", #ns.warnings)
   for i = math.max(1, #ns.warnings - 4), #ns.warnings do

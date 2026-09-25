@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
 # Refresh the public example journal (site/example/, served on GitHub Pages) from your local story pages.
-# This makes your journal public once you commit and push: read it first.
-set -euo pipefail
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO"
-ls exports/html/*.html >/dev/null 2>&1 || { echo "no story pages in exports/html; run: ramble page tonight" >&2; exit 1; }
-rm -rf site/example
-mkdir -p site/example
-cp -R exports/html/. site/example/
-git status --short site/
-echo "Review, then commit and push to main; the Pages workflow deploys site/."
+# This is now `ramble share --all`: it asks before pushing, because pushing makes your journal public.
+exec ramble share --all "$@"

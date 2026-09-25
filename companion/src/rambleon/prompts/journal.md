@@ -15,7 +15,9 @@ Rules, in priority order:
 6. Places: name them as recorded. Do not describe their appearance unless a note does.
    People and quest-givers: only names that appear in the evidence. Pronouns for the character follow the
    recorded gender; if none is recorded, use the name or they/them.
-7. Past tense. Keep to the length the voice allows.
+7. Screenshots: you cannot see them. You may mention that a picture was taken at a recorded moment; never
+   describe what it shows.
+8. Past tense. Keep to the length the voice allows.
 
 Output format, exactly:
 

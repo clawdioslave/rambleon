@@ -21,6 +21,7 @@ from . import service as svc
 from .nights import nights as list_nights, resolve_night
 from .notify import notify
 from .publish import export_html, publish_chapters, write_html_index
+from .screenshots import refresh_session_screenshots
 from .watch import Finalizer
 from .wowstate import logged_out_since
 from .summarize import DEFAULT_MODEL, DEFAULT_VOICE, available_voices, summarize as run_summarize
@@ -159,6 +160,9 @@ def _finish_night(archive: Archive, paths, use_ai: bool, model: str, voice: str 
     """What happens when a night is over: export, journal, HTML, publish to the game."""
     def run(session: dict) -> None:
         night = resolve_night(archive, session["id"]) or session
+        # Screenshots taken after the last SavedVariables write are only on disk: pair them now.
+        if refresh_session_screenshots(archive, paths, night.get("sessionIds") or [session["id"]]):
+            night = resolve_night(archive, session["id"]) or session
         md = export_session(night, paths.exports_dir)
         log(f"exported {md.name}")
         if use_ai:
@@ -176,7 +180,7 @@ def _finish_night(archive: Archive, paths, use_ai: bool, model: str, voice: str 
 
 @app.command()
 def watch(interval: float = typer.Option(1.0, help="Seconds between polls."),
-          copy_screenshots: bool = typer.Option(False, "--copy-screenshots", help="Copy matching screenshots into the archive."),
+          copy_screenshots: bool = typer.Option(True, "--copy-screenshots/--no-copy-screenshots", help="Copy matching screenshots into the archive."),
           no_ai: bool = typer.Option(False, "--no-ai", help="Do not call the Claude CLI when a chapter ends."),
           no_auto: bool = typer.Option(False, "--no-auto", help="Only archive; skip export/journal/publish."),
           model: str = typer.Option(DEFAULT_MODEL, "--model"),
@@ -264,6 +268,8 @@ def page(ref: str = typer.Argument("latest"), open_it: bool = typer.Option(True,
     """Build the HTML story page for a night (journal, recap, screenshots, timeline) and open it in the browser."""
     archive, paths = _archive()
     session = _night(ref)
+    if refresh_session_screenshots(archive, paths, session.get("sessionIds") or []):
+        session = _night(ref)
     out = export_html(session, archive, paths.exports_dir)
     console.print(f"story page {out}")
     if open_it and sys.platform == "darwin":
@@ -271,7 +277,30 @@ def page(ref: str = typer.Argument("latest"), open_it: bool = typer.Option(True,
 
 
 @app.command()
-def ingest(copy_screenshots: bool = typer.Option(False, "--copy-screenshots")) -> None:
+def share(refs: list[str] = typer.Argument(None, help="tonight | latest | YYYY-MM-DD | night id (default: tonight)"),
+          all_nights: bool = typer.Option(False, "--all", help="Every night; replaces site/example entirely."),
+          yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask before pushing."),
+          dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be copied and run; change nothing.")) -> None:
+    """Put a night's story page (with its pictures) on your public GitHub Pages site. Manual on purpose:
+    this is the moment the chapter leaves your Mac."""
+    from .share import ShareError, share as run_share
+    archive, paths = _archive()
+    try:
+        result = run_share(archive, paths, list(refs or []), all_nights=all_nights, yes=yes, dry_run=dry_run, log=log,
+                           confirm=lambda q: typer.confirm(q, default=False))
+    except ShareError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+    if dry_run:
+        for cmd in result.commands:
+            console.print("  " + " ".join(cmd))
+    console.print(result.message)
+    for url in result.urls:
+        console.print(url)
+
+
+@app.command()
+def ingest(copy_screenshots: bool = typer.Option(True, "--copy-screenshots/--no-copy-screenshots")) -> None:
     """Archive whatever Rambleon SavedVariables exist right now (one pass, no watching)."""
     archive, paths = _archive()
     outcomes = ingest_once(paths, archive, log, copy_screenshots)
@@ -282,7 +311,7 @@ def ingest(copy_screenshots: bool = typer.Option(False, "--copy-screenshots")) -
 
 
 @app.command()
-def reprocess(copy_screenshots: bool = typer.Option(False, "--copy-screenshots")) -> None:
+def reprocess(copy_screenshots: bool = typer.Option(True, "--copy-screenshots/--no-copy-screenshots")) -> None:
     """Rebuild normalized sessions from the archived raw snapshots (use after upgrading the companion)."""
     archive, paths = _archive()
     run_reprocess(paths, archive, log, copy_screenshots)

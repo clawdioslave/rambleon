@@ -6,7 +6,8 @@ local function help()
   ns.Print("  /ramble — open or close your adventure log")
   ns.Print("  /ramble status — one-line summary of tonight")
   ns.Print("  /ramble note <text> — write down what just happened")
-  ns.Print("  /ramble mark — remember this moment")
+  ns.Print("  /ramble mark — remember this moment (takes a screenshot)")
+  ns.Print("  /ramble shots on|off — automatic screenshots at level ups, marks and new zones")
   ns.Print("  /ramble save — write the log to disk now (asks before reloading; logging out does it anyway)")
   ns.Print("  /ramble chapters — read past chapters (published from your Mac)")
   ns.Print("  /ramble debug — addon and client diagnostics")
@@ -30,6 +31,10 @@ local function handle(msg)
     end
   elseif cmd == "mark" then
     if ns.MarkMoment() then ns.UI.MomentRemembered() end
+  elseif cmd == "shots" or cmd == "screenshots" then
+    if rest == "on" then ns.SetAutoShots(true) elseif rest == "off" then ns.SetAutoShots(false) end
+    ns.Print("automatic screenshots are " .. (ns.AutoShotsEnabled() and "on" or "off")
+             .. " (level ups, /ramble mark, new zones; /ramble shots on|off)")
   elseif cmd == "save" or cmd == "end" then
     ns.UI.PromptEndChapter()
   elseif cmd == "debug" then

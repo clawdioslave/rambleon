@@ -56,7 +56,8 @@ help from us.
 - [ ] **Voices.** Two or three good ones, chosen per night or per character. Keep `golden` and `field-journal`;
       add a terse "captain's log". A `ramble voices try tonight` that renders all voices for comparison.
 - [ ] **Recap card.** A PNG share card (title, date, stats, one line) generated from the story page for socials.
-- [ ] **Screenshots on the timeline** in the story page, with the nearest event as caption (already wired; verify).
+- [x] **Screenshots on the timeline** in the story page, captioned by the moment (auto shots at level ups, marks, new
+      zones; hero picture; `ramble share`). Done 2026-09-22; in-game verification pending.
 - [ ] **Chapter continuity.** Give the writer the previous chapter's title and one-line summary so a season reads
       as one story, without letting it re-narrate old nights.
 

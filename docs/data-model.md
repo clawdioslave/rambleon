@@ -49,7 +49,7 @@ RambleonDB = {
 | `GROUP_JOIN {name, class}`, `GROUP_LEAVE {name}` | |
 | `INSTANCE_ENTER {name, instanceType}`, `INSTANCE_EXIT` | |
 | `ACHIEVEMENT {id, name}` | |
-| `SCREENSHOT` | timestamp only; the companion finds the file |
+| `SCREENSHOT` | `reason` (`LEVEL_UP` \| `MARK` \| `ZONE_ENTER` \| `MANUAL`), `auto`, and for automatic shots the `level`/`zone`/`subzone` of the moment; the companion finds the file by time |
 | `NOTE {text}`, `MARK` | |
 | `FIRST_KILL {name, xp}` | first time an enemy of that name gave XP this session (from the "X dies, you gain N experience." chat line; no combat log) |
 | `OBJECTIVE_COMPLETE {questID, title, text}` | a quest objective finished, e.g. "8/8 Timberling slain" |
@@ -57,6 +57,8 @@ RambleonDB = {
 | `EQUIP {itemID, name, quality, qualityName, slot}` | an uncommon-or-better item equipped, once per item per session |
 
 Every event also carries `level`, and `zone`/`subzone` unless it is a zone event itself.
+
+`RambleonDB.settings = { autoScreenshots = true|false }` is the only per-character setting (`/ramble shots on|off`).
 
 ### States
 
@@ -95,7 +97,9 @@ It accepts what Blizzard's serializer emits (observed on this machine, see `envi
   "counters": { "levelsGained": 2, "...": 0 },
   "events": [ { "t": 1790000123, "type": "ZONE_ENTER", "zone": "Teldrassil", "subzone": "Dolanaar", "mapID": 57 } ],
   "zones": [], "people": [], "failedEvents": [],
-  "screenshots": [ { "path": "...", "file": "WoWScrnShot_092126_201547.jpg", "takenAt": 1790000500, "nearestEventIndex": 4, "nearestEventSeconds": 12 } ],
+  "screenshots": [ { "path": "...", "file": "WoWScrnShot_092126_201547.jpg", "takenAt": 1790000500, "archived": "archive/screenshots/<session>/WoWScrnShot_092126_201547.jpg",
+                     "eventIndex": 4, "eventSeconds": 1, "reason": "LEVEL_UP", "auto": true, "level": 9, "zone": "Teldrassil", "subzone": "Dolanaar",
+                     "caption": "Reached Level 9 in Dolanaar" } ],
   "archive": { "capturedAt": 1790008100, "rawSnapshot": "sessions/raw/2026-09-22T031500Z_ab12cd34_Rambleon.lua",
                "sourceHash": "...", "sourceFile": ".../WTF/Account/<ACCOUNT>/70/Rambleon-Birdsong/SavedVariables/Rambleon.lua",
                "firstCapturedAt": 1790008100, "revision": 1 }
@@ -108,6 +112,10 @@ Normalization rules:
   reported as `ended` with `endedAt = lastSeen` and `endReason = "logout"`. `addonState` keeps the original.
 - Events are sorted by `t` (stable). Non-scalar event fields are dropped.
 - A session without an id, start time, character or event list is skipped.
+- Screenshots (`screenshots.py`): a file is matched to the `SCREENSHOT` event within 5 s of its mtime (one file per event)
+  and inherits its `reason`; otherwise `eventIndex` is the nearest ordinary event and the caption is "Screenshot in <place>".
+  Pairing runs at capture, at finalization (late files), on `ramble page`/`share`, and again over the merged night.
+  Entries written before 0.3 carry `nearestEventIndex` instead; `ramble reprocess` rewrites them.
 
 ## 4. Archive rules (`archive/`)
 
@@ -118,7 +126,7 @@ archive/
   sessions/raw/failed/     files that would not parse, with a .reason.txt beside each
   sessions/normalized/     one JSON per session id
   sessions/normalized/history/  previous versions of any normalized file that was replaced
-  screenshots/<session>/   only when `--copy-screenshots` is used (references are the default)
+  screenshots/<session>/   copies of the night's screenshots (default; `--no-copy-screenshots` keeps references only)
   index.json               rebuilt after every change
   watch.pid                present while `ramble watch` runs
 ```
