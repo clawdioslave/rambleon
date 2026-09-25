@@ -207,7 +207,7 @@ def pick_hero(images: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _figure(img: dict[str, Any], cls: str = "") -> str:
-    cap = f"{clock(img.get('takenAt'))} — {img['caption']}"
+    cap = img['caption']  # no clock times on the public page
     return (f"<figure{' class=' + repr(cls) if cls else ''}><img src='{html.escape(img['src'])}' alt='{html.escape(img['caption'])}'>"
             f"<figcaption>{html.escape(cap)}</figcaption></figure>")
 
