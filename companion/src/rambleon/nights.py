@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .archive import Archive, load_json
+from .config import load_local_config
 from .model import COUNTER_KEYS, SUSPEND_TIMEOUT
 from .screenshots import pair_screenshots
 
@@ -18,6 +19,27 @@ def night_date(started_at: int | None) -> str:
     if dt.hour < CUTOFF_HOUR:
         dt -= timedelta(days=1)
     return dt.strftime("%Y-%m-%d")
+
+
+def chapter_splits() -> list[int]:
+    """`[chapters] splits = ["2026-09-25T15:10"]` in rambleon.local.toml: a session that starts at or after one of
+    these local times begins a new chapter that same day — for when the player closes a chapter and plays on."""
+    cfg = load_local_config().get("chapters", {})
+    raw = cfg.get("splits") or [] if isinstance(cfg, dict) else []
+    out: list[int] = []
+    for item in raw:
+        try:
+            out.append(int(datetime.fromisoformat(str(item)).timestamp()))
+        except ValueError:
+            continue
+    return sorted(out)
+
+
+def night_part(started_at: int | None, splits: list[int] | None = None) -> int:
+    """0 for the day's first chapter; n for the chapter after the n-th split that falls on the same night."""
+    date = night_date(started_at)
+    splits = chapter_splits() if splits is None else splits
+    return sum(1 for t in splits if night_date(t) == date and (started_at or 0) >= t)
 
 
 def _merge_keyed(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], key: str, sum_fields: tuple[str, ...]) -> None:
@@ -43,10 +65,12 @@ def session_over(s: dict[str, Any], now: float | None = None) -> bool:
     return (now - (s.get("lastSeen") or s.get("startedAt") or 0)) > SUSPEND_TIMEOUT
 
 
-def build_night(sessions: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
+def build_night(sessions: list[dict[str, Any]], now: float | None = None, part: int = 0) -> dict[str, Any]:
     sessions = sorted(sessions, key=lambda s: s.get("startedAt") or 0)
     first, last = sessions[0], sessions[-1]
     date = night_date(first.get("startedAt"))
+    if part:                      # a later chapter on the same night keeps its own id and file names
+        date = f"{date}-{part + 1}"
     night: dict[str, Any] = {
         "kind": "night",
         "schemaVersion": first.get("schemaVersion"),
@@ -98,16 +122,17 @@ def build_night(sessions: list[dict[str, Any]], now: float | None = None) -> dic
 
 
 def nights(archive: Archive, slug: str | None = None) -> list[dict[str, Any]]:
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    groups: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
+    splits = chapter_splits()
     for row in archive.list_sessions():
         if row.get("trivial"):
             continue
         if slug and row.get("slug") != slug:
             continue
         session = load_json(archive.normalized_dir / row["file"])
-        key = (row.get("slug") or "unknown", night_date(row.get("startedAt")))
+        key = (row.get("slug") or "unknown", night_date(row.get("startedAt")), night_part(row.get("startedAt"), splits))
         groups.setdefault(key, []).append(session)
-    out = [build_night(v) for v in groups.values()]
+    out = [build_night(v, part=k[2]) for k, v in groups.items()]
     out.sort(key=lambda n: n.get("startedAt") or 0)
     return out
 
