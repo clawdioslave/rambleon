@@ -18,7 +18,7 @@ from .export import duration, export_session, render_markdown
 from .install import install_addon
 from .paths import resolve_paths
 from . import service as svc
-from .nights import nights as list_nights, resolve_night
+from .nights import nights as list_nights, nights_of_session, resolve_night
 from .notify import notify
 from .publish import export_html, publish_chapters, write_html_index
 from .screenshots import refresh_session_screenshots
@@ -161,10 +161,13 @@ def install(copy: bool = typer.Option(False, "--copy", help="Copy the AddOn inst
 def _finish_night(archive: Archive, paths, use_ai: bool, model: str, voice: str | None = None):
     """What happens when a night is over: export, journal, HTML, publish to the game."""
     def run(session: dict) -> None:
-        night = resolve_night(archive, session["id"]) or session
         # Screenshots taken after the last SavedVariables write are only on disk: pair them now.
-        if refresh_session_screenshots(archive, paths, night.get("sessionIds") or [session["id"]]):
-            night = resolve_night(archive, session["id"]) or session
+        refresh_session_screenshots(archive, paths, [session["id"]])
+        # A chapter split can cut this session in two: every chapter it feeds is (re)written.
+        for night in nights_of_session(archive, session["id"]) or [resolve_night(archive, session["id"]) or session]:
+            _finish_one(night)
+
+    def _finish_one(night: dict) -> None:
         md = export_session(night, paths.exports_dir)
         log(f"exported {md.name}")
         if use_ai:
@@ -280,7 +283,7 @@ def page(ref: str = typer.Argument("latest"), open_it: bool = typer.Option(True,
     """Build the HTML story page for a night (journal, recap, screenshots, timeline) and open it in the browser."""
     archive, paths = _archive()
     session = _night(ref)
-    if refresh_session_screenshots(archive, paths, session.get("sessionIds") or []):
+    if refresh_session_screenshots(archive, paths, sorted({i.split("#")[0] for i in session.get("sessionIds") or []})):
         session = _night(ref)
     out = export_html(session, archive, paths.exports_dir)
     console.print(f"story page {out}")
