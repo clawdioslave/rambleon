@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import re
 import json
 import shutil
 import subprocess
@@ -141,7 +142,7 @@ h1::after{content:'';display:block;width:120px;height:2px;margin-top:8px;backgro
 h2{font-size:22px;margin:36px 0 8px;border-bottom:1px solid #c9b48a;padding-bottom:4px}
 .meta{color:#6b5233;margin-bottom:24px}.recap{white-space:pre-line;background:#efe3c6;border-left:4px solid #b08d4c;padding:12px 16px;margin:20px 0}
 .journal p{margin:0 0 14px}ul{padding-left:22px}li{margin:3px 0}figure{margin:24px 0}figure img{width:100%;border:1px solid #c9b48a;border-radius:4px}
-figcaption{font-size:14px;color:#6b5233;margin-top:6px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin:12px 0}
+figcaption{font-size:14px;color:#6b5233;margin-top:6px}.plates{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:6px 0 26px}.plates.one{grid-template-columns:1fr}.plates figure{margin:0}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin:12px 0}
 .stat b{display:block;font-size:24px}.stat span{font-size:13px;color:#6b5233;text-transform:uppercase;letter-spacing:1px}
 footer{margin-top:48px;font-size:13px;color:#8a7250}
 figure.hero{margin:0 0 28px}li.shot{list-style:none;margin:10px 0 18px -22px}li.shot figure{margin:0}
@@ -206,6 +207,71 @@ def pick_hero(images: list[dict[str, Any]]) -> dict[str, Any] | None:
     return images[0] if images else None
 
 
+ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth",
+            11: "eleventh", 12: "twelfth", 13: "thirteenth", 14: "fourteenth", 15: "fifteenth", 16: "sixteenth", 17: "seventeenth",
+            18: "eighteenth", 19: "nineteenth", 20: "twentieth", 21: "twenty-first", 22: "twenty-second", 23: "twenty-third",
+            24: "twenty-fourth", 25: "twenty-fifth", 26: "twenty-sixth", 27: "twenty-seventh", 28: "twenty-eighth", 29: "twenty-ninth", 30: "thirtieth"}
+
+
+def ghost_spans(events: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    """(death, revived) stretches: a picture taken while dead or running back is not a picture for the story."""
+    spans, dead = [], None
+    for ev in sorted(events, key=lambda e: e.get("t") or 0):
+        t, k = ev.get("t"), ev.get("type")
+        if not isinstance(t, (int, float)):
+            continue
+        if k == "DEATH" and dead is None:
+            dead = t
+        elif k == "REVIVED" and dead is not None:
+            spans.append((dead - 3, t + 4)); dead = None
+    if dead is not None:
+        spans.append((dead - 3, dead + 600))
+    return spans
+
+
+def _place_of(img: dict[str, Any]) -> str:
+    cap = img.get("caption") or ""
+    if " in " in cap:
+        return cap.rsplit(" in ", 1)[1].strip()
+    if cap.startswith("Entered "):
+        return cap[len("Entered "):].split(" (")[0].strip()
+    return ""
+
+
+def _interleave(paragraphs: list[str], images: list[dict[str, Any]], per_paragraph: int = 2) -> tuple[list[list[dict[str, Any]]], list[dict[str, Any]]]:
+    """Picture-book placement: each picture goes after the paragraph that names its place (or its level), else
+    where it falls in time. Marked moments (level-ups, new zones, /ramble mark) win the slots; the rest overflow."""
+    n, p = len(images), len(paragraphs)
+    slots: list[list[dict[str, Any]]] = [[] for _ in paragraphs]
+    if not p:
+        return slots, list(images)
+    lowered = [para.lower() for para in paragraphs]
+    ranked = sorted(range(n), key=lambda i: (images[i].get("reason") == "MANUAL", images[i].get("takenAt") or 0))
+    overflow = []
+    for i in ranked:
+        img = images[i]
+        guess = min(p - 1, int(i * p / max(1, n)))          # time order → paragraph
+        hits = []
+        place = _place_of(img).lower()
+        if place:
+            hits = [j for j, para in enumerate(lowered) if place in para]
+        if not hits and img.get("reason") == "LEVEL_UP":
+            m = re.search(r"level (\d+)", img.get("caption") or "")
+            word = ORDINALS.get(int(m.group(1))) if m else None
+            if word:
+                hits = [j for j, para in enumerate(lowered) if f"{word} level" in para or f"level {m.group(1)}" in para]
+        target = min(hits, key=lambda j: abs(j - guess)) if hits else guess
+        for j in [target] + [k for k in range(p) if k != target and abs(k - target) <= 1]:
+            if len(slots[j]) < per_paragraph:
+                slots[j].append(img); break
+        else:
+            overflow.append(img)
+    for lst in slots:
+        lst.sort(key=lambda x: x.get("takenAt") or 0)
+    overflow.sort(key=lambda x: x.get("takenAt") or 0)
+    return slots, overflow
+
+
 def _figure(img: dict[str, Any], cls: str = "") -> str:
     cap = img['caption']  # no clock times on the public page
     return (f"<figure{' class=' + repr(cls) if cls else ''}><img src='{html.escape(img['src'])}' alt='{html.escape(img['caption'])}'>"
@@ -222,19 +288,29 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
              f"<h1>{html.escape(title)}</h1>",
              f"<div class='meta'>{html.escape(name)} · {html.escape(long_date(session.get('startedAt')))}</div>"]
     images = prepare_images(session, image_dir)
+    spans = ghost_spans(session.get("events", []))
+    images = [img for img in images if img.get("reason") != "MANUAL" or not any(a <= (img.get("takenAt") or 0) <= b for a, b in spans)]   # an unmarked picture taken while dead or running back is not a picture for the story
     hero = pick_hero(images)
     if hero:
         parts.append(_figure(hero, "hero"))
+    rest = [img for img in images if img is not hero]
     if journal and journal.get("journal"):
-        parts.append("<div class='journal'>" + _paragraphs(journal["journal"]) + "</div>")
+        paragraphs = [b.strip() for b in journal["journal"].replace("\r", "").split("\n\n") if b.strip() and not b.strip().startswith("#")]
+        slots, rest = _interleave(paragraphs, rest)
+        body = []
+        for para, plates in zip(paragraphs, slots):
+            body.append("<p>" + html.escape(para).replace("\n", "<br>") + "</p>")
+            if plates:
+                body.append(f"<div class='plates {'one' if len(plates) == 1 else 'two'}'>" + "".join(_figure(img) for img in plates) + "</div>")
+        parts.append("<div class='journal'>" + "\n".join(body) + "</div>")
     recap = (journal or {}).get("recap") or render_recap(session)
     parts.append("<div class='recap'>" + html.escape(recap.strip()) + "</div>")
     stats = [("Quests", cnt.get("questsCompleted", 0)), ("Places", len(session.get("zones", []))),
              ("Enemies slain", cnt.get("kills", 0)), ("Loot", cnt.get("loot", 0)),
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
-    # The chapter itself is the journey: no event timeline on the public page. The remaining pictures follow it.
-    gallery = [img for img in images if img is not hero]
+    # The chapter itself is the journey: no event timeline on the public page. Pictures that found no place in it follow.
+    gallery = rest
     if gallery:
         parts.append("<h2>Pictures</h2><div class='gallery'>" + "".join(_figure(img) for img in gallery) + "</div>")
     parts.append(f"<footer>Recorded by Rambleon · session {html.escape(session.get('id', ''))}</footer></body></html>")
