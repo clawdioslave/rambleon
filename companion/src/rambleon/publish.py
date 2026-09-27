@@ -310,7 +310,8 @@ def render_html(session: dict[str, Any], journal: dict[str, Any] | None, number:
              ("People", len(session.get("people", []))), ("XP", f"{cnt.get('xpGained', 0):,}")]
     parts.append("<div class='stats'>" + "".join(f"<div class='stat'><b>{html.escape(str(v))}</b><span>{html.escape(k)}</span></div>" for k, v in stats) + "</div>")
     # The chapter itself is the journey: no event timeline on the public page. Pictures that found no place in it follow.
-    gallery = [img for img in rest if img.get("reason") != "MANUAL"][:6] or rest[:6]   # a few more pictures, not a contact sheet of every fight
+    marked = [img for img in rest if img.get("reason") != "MANUAL"]
+    gallery = (marked + [img for img in rest if img not in marked])[:6]   # a few more pictures, marked moments first — not a contact sheet of every fight
     if gallery:
         parts.append("<h2>Pictures</h2><div class='gallery'>" + "".join(_figure(img) for img in gallery) + "</div>")
     parts.append(f"<footer>Recorded by Rambleon · session {html.escape(session.get('id', ''))}</footer></body></html>")
